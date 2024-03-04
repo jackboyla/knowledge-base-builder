@@ -26,25 +26,28 @@ MODEL = "gpt-3.5-turbo-0125"
 
 
 class ValidatedProperty(BaseModel, extra='allow'):
-    entity_label: str
-    property_name: str
-    property_value: Any
+    subject_name: str
+    relation: str
+    object_name: Any
 
-    property_is_valid: Literal[True, False, "Not enough information to say"] = Field(
+    triple_is_valid: Literal[True, False, "Not enough information to say"] = Field(
       ...,
-        description="Whether the property is generally valid, according to the previously stated rules.",
+        description="Whether the subject-relation-object triple is generally valid, according to the previously stated rules.",
     )
-    is_valid_reason: Optional[str] = Field(
-        None, description="The reason why the property is valid if it is indeed valid."
+    reason: str = Field(
+        None, description="The reason why the subject-relation-object triple is or is not valid."
     )
-    error_message: Optional[str] = Field(
-        None, description="The error message if either property_name and/or property_value is not valid."
-    )
+    # is_valid_reason: Optional[str] = Field(
+    #     None, description="The reason why the subject-relation-object triple is valid, if it is indeed valid."
+    # )
+    # error_message: Optional[str] = Field(
+    #     None, description="The error message if the subject-relation-object triple is not valid."
+    # )
 
-    @model_validator(mode='after')
-    def assert_decision_is_made(self, info: ValidationInfo):
-        assert self.is_valid_reason is not None or self.error_message is None, "Fields is_valid_reason and error_message cannot both be filled."
-        return self
+    # @model_validator(mode='after')
+    # def assert_decision_is_made(self, info: ValidationInfo):
+    #     assert self.is_valid_reason is not None or self.error_message is None, "Fields `is_valid_reason` and `error_message` cannot both be filled."
+    #     return self
 
 
 @staticmethod
@@ -58,6 +61,10 @@ def validate_statement_with_context(entity_label, predicted_property_name, predi
     resp: ValidatedProperty = client.chat.completions.create(
         response_model=ValidatedProperty,
         messages=[
+            {
+                "role": "system",
+                "content": "You are a Knowledge Graph Completion triple evaluator."
+            },
             {
                 "role": "user",
                 "content": f"Using your knowledge of the world and the given context as a reference, " +
@@ -94,6 +101,10 @@ def validate_statement_with_no_context(entity_label, predicted_property_name, pr
     resp: ValidatedProperty = client.chat.completions.create(
         response_model=ValidatedProperty,
         messages=[
+            {
+                "role": "system",
+                "content": "You are a Knowledge Graph Completion triple evaluator."
+            },
             {
                 "role": "user",
                 "content": f"Using your knowledge of the world, " +
@@ -169,7 +180,7 @@ class WebKGValidator(BaseModel):
 
 
     @model_validator(mode='after')
-    def assert_all_properties_validated(self, info: ValidationInfo):
+    def assert_all_triples_validated(self, info: ValidationInfo):
         if len(self.validated_triples) != len(self.triples):
             raise ValueError(
                 "Number of properties validated does not match number of properties in the prediction knowledge base. " +
@@ -185,7 +196,7 @@ class WikidataKGValidator(BaseModel):
     ''' Validate triples with LLM's inherent knowledge + Wikidata'''
 
     triples: List
-    validated_properties: List[ValidatedProperty] = []
+    validated_triples: List[ValidatedProperty] = []
 
 
     @staticmethod
@@ -211,7 +222,7 @@ class WikidataKGValidator(BaseModel):
     @model_validator(mode='before')
     def validate(self, context) -> "WikidataKGValidator":
 
-        self['validated_properties'] = []
+        self['validated_triples'] = []
 
         wrapper = WikidataAPIWrapper()
         wrapper.top_k_results = 1
@@ -231,13 +242,13 @@ class WikidataKGValidator(BaseModel):
                 context=wikidata_reference
             )
 
-            self['validated_properties'].append(resp)
+            self['validated_triples'].append(resp)
 
         return self
 
 
     @model_validator(mode='after')
-    def assert_all_properties_validated(self, info: ValidationInfo):
+    def assert_all_triples_validated(self, info: ValidationInfo):
         if len(self.validated_triples) != len(self.triples):
             raise ValueError(
                 "Number of properties validated does not match number of properties in the prediction knowledge base. " +
@@ -271,4 +282,14 @@ class WorldKnowledgeKGValidator(BaseModel):
             resp.candidate_triple = triple
 
             self['validated_triples'].append(resp)
+        return self
+    
+    @model_validator(mode='after')
+    def assert_all_triples_validated(self, info: ValidationInfo):
+        if len(self.validated_triples) != len(self.triples):
+            raise ValueError(
+                "Number of properties validated does not match number of properties in the prediction knowledge base. " +
+                f"Number of properties validated: {len(self.validated_triples)}, " +
+                f"Number of properties in the text: {len(self.triples)}"
+                )
         return self

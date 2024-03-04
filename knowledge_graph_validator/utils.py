@@ -1,6 +1,23 @@
 import json
 from typing import List, Dict, Union, Any, Optional, Literal
 import os
+import sys
+import logging
+
+
+def create_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        '%(asctime)s %(name)s %(levelname)s: %(message)s'
+    )
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
+
 
 def read_jsonl(file_path: str):
     """read a JSONL file into a list of JSON objects"""
@@ -87,13 +104,13 @@ def translate_triples(triples, entity_mapping, relation_mapping):
 def read_dataset(dataset_name: Literal['FB13', 'WN11', 'WN18RR', 'YAGO3-10']) -> List[Dict]:
     positive_triples = []
     negative_triples = []
-    if os.path.exists(f'../../data/{dataset_name}/entity2text_capital.txt'):
-        entity_mapping_path = f'../../data/{dataset_name}/entity2text_capital.txt'
+    if os.path.exists(f'../data/{dataset_name}/entity2text_capital.txt'):
+        entity_mapping_path = f'../data/{dataset_name}/entity2text_capital.txt'
     else:
-        entity_mapping_path = f'../../data/{dataset_name}/entity2text.txt'
+        entity_mapping_path = f'../data/{dataset_name}/entity2text.txt'
     ent_mapping = load_mapping(entity_mapping_path, dataset_name)
-    rel_mapping = load_mapping(f'../../data/{dataset_name}/relation2text.txt')
-    with open(f'../../data/{dataset_name}/test.tsv', 'r') as file:
+    rel_mapping = load_mapping(f'../data/{dataset_name}/relation2text.txt')
+    with open(f'../data/{dataset_name}/test.tsv', 'r') as file:
         for line in file:
             parts = line.strip().split('\t')  # Splitting each line by tab
             if len(parts) == 4:  # Ensuring there are exactly four parts

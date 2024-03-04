@@ -16,12 +16,12 @@ def compute_metrics(pos_results, neg_results):
     tn = 0
     fn = 0 
     for val in pos_results[0].model_dump()['validated_triples']:
-        if val['property_is_valid']:    # property is correctly marked as valid
+        if val['triple_is_valid']:    # property is correctly marked as valid
             tp += 1
         else:                           # property is incorrectly marked as invalid
             fn += 1
     for val in neg_results[0].model_dump()['validated_triples']:
-        if val['property_is_valid']:    # property is incorrectly marked as valid
+        if val['triple_is_valid']:    # property is incorrectly marked as valid
             fp += 1
         else:                           # property is correctly marked as invalid
             tn += 1
@@ -42,17 +42,17 @@ def sample_triples(triples, num_examples, random_seed=None):
 @click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
 @click.option('--save-path', required=True, type=click.Path(), help='Where to save the results')
 @click.option('--reference-context', required=False, type=click.Path(), help='The path to a custom reference context if the `RefKG` or `RefDocs` validator is chosen.')
-@click.option('--context-type', required=True, type=click.Choice(['LLMonly', 'RefKG', 'RefDocs', 'WebSearch'], case_sensitive=False), help='Model name')
+@click.option('--context-type', required=True, type=click.Choice(['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'WikidataKGValidator', 'WebKGValidator'], case_sensitive=False), help='Model name')
 def main(dataset, num_examples, random_seed, save_path, reference_context, context_type):
     """Evaluate a model on a dataset.
 
     usage:
             python assess_validator.py \
                 --dataset FB13 \
-                --num-examples 200 \
+                --num-examples 10 \
                 --random-seed 42 \
-                --save-path ../data/websearch-context/200results.json \
-                --context-type WebSearch
+                --save-path ../data/wikidata-context/20results.json \
+                --context-type WikidataKGValidator
     
     """
 
@@ -62,8 +62,9 @@ def main(dataset, num_examples, random_seed, save_path, reference_context, conte
     positive_triples, negative_triples = utils.read_dataset(dataset)
 
     evaluators = {
-        # 'LLMonly': validators.NoContextValidator,
-        # 'RefKG': validators.RefKGValidator,
+        'WorldKnowledgeKGValidator': validators.WorldKnowledgeKGValidator,
+        # 'ReferenceKGValidator': validators.ReferenceKGValidator,
+        'WikidataKGValidator': validators.WikidataKGValidator,
         'WebSearch': validators.WebKGValidator,
     }
     v = evaluators[context_type]
@@ -76,11 +77,11 @@ def main(dataset, num_examples, random_seed, save_path, reference_context, conte
     neg_results = []
     neg_results.append(v(**{'triples': negative_samples}))
 
-    metrics = compute_metrics(pos_results, neg_results)
-    logger.info(f"-------------\nMETRICS:\n\n {metrics}\n-------------")
-
     results_json = [r.model_dump() for r in neg_results] + [r.model_dump() for r in pos_results]
     utils.save_jsonl(results_json, save_path)
+
+    metrics = compute_metrics(pos_results, neg_results)
+    logger.info(f"-------------\nMETRICS:\n\n {metrics}\n-------------")
 
 if __name__ == "__main__":
     main()

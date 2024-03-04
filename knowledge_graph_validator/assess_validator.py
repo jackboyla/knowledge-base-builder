@@ -29,29 +29,35 @@ def compute_metrics(pos_results, neg_results):
     metrics = utils.calc_metrics(tp, fp, tn, fn)
     return metrics
 
-def sample_triples(triples, num_examples, random):
-    if random:
+def sample_triples(triples, num_examples, random_seed=None):
+    if random_seed:
+        np.random.seed(random_seed)  
         return np.random.choice(triples, num_examples, replace=False)
     else:
         return triples[:num_examples]
 
 @click.command()
-@click.option('--dataset', required=True, type=click.Choice(['FB13', 'WN11', 'WN18RR', 'YAGO3-10'], case_sensitive=False), help='Dataset name')
+@click.option('--dataset', required=True, type=click.Choice(['FB13', 'WN11', 'WN18RR', 'YAGO3-10'], case_sensitive=False), help='Dataset name; one of [FB13, WN11, WN18RR, YAGO3-10]')
 @click.option('--num-examples', default=10, type=int, help='Number of examples to evaluate')
-@click.option('--random', is_flag=True, help='Whether to randomly select examples')
+@click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
 @click.option('--save-path', required=True, type=click.Path(), help='Where to save the results')
-@click.option('--context-type', required=True, type=click.Choice(['LLMonly', 'RefKG', 'WebSearch'], case_sensitive=False), help='Model name')
-def main(dataset, num_examples, random, save_path, context_type):
+@click.option('--reference-context', required=False, type=click.Path(), help='The path to a custom reference context if the `RefKG` or `RefDocs` validator is chosen.')
+@click.option('--context-type', required=True, type=click.Choice(['LLMonly', 'RefKG', 'RefDocs', 'WebSearch'], case_sensitive=False), help='Model name')
+def main(dataset, num_examples, random_seed, save_path, reference_context, context_type):
     """Evaluate a model on a dataset.
 
     usage:
-            python assess_validator.py --dataset FB13 \
-                --num-examples 10 \
-                --random \
-                --save-path results.json \
+            python assess_validator.py \
+                --dataset FB13 \
+                --num-examples 200 \
+                --random-seed 42 \
+                --save-path ../data/websearch-context/200results.json \
                 --context-type WebSearch
     
     """
+
+    if context_type in ['RefKG', 'RefDocs']:
+        assert reference_context is not None, "You must provide a path to a reference context if you choose a reference context validator."
 
     positive_triples, negative_triples = utils.read_dataset(dataset)
 
@@ -62,8 +68,8 @@ def main(dataset, num_examples, random, save_path, context_type):
     }
     v = evaluators[context_type]
 
-    positive_samples = sample_triples(positive_triples, num_examples//2, random)
-    negative_samples = sample_triples(negative_triples, num_examples//2, random)
+    positive_samples = sample_triples(positive_triples, num_examples//2, random_seed)
+    negative_samples = sample_triples(negative_triples, num_examples//2, random_seed)
 
     pos_results = []
     pos_results.append(v(**{'triples': positive_samples}))

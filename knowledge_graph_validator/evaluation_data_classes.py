@@ -16,6 +16,8 @@ MODEL = "gpt-3.5-turbo-0125"
 
 # v0.1
 
+# Eval properties all at once
+
 #######################################
 
 class ValidatedProperty(BaseModel):
@@ -130,6 +132,8 @@ class EvaluationKB(BaseModel):
 #######################################
 
 # v0.2
+
+# Eval properties all at once
 
 #######################################
 
@@ -255,6 +259,8 @@ class EvaluationKB(BaseModel):
 #######################################
 
 # v0.3
+    
+# Eval properties all at once
 
 #######################################
 
@@ -375,3 +381,132 @@ class EvaluationKB(BaseModel):
         return self
     
 
+
+
+
+
+
+
+
+
+
+
+
+#######################################
+
+# v0.4
+    
+# Validate each property individually
+
+#######################################
+
+
+
+
+
+
+
+class ValidatedProperty(BaseModel):
+    property_name: str
+    property_value: Union[List[str], str, int, Dict[str, str]]
+    property_name_is_valid: bool = Field(
+      ...,
+        description="A predicted property name is valid if is semantically close " +
+                    "to a property name in the reference knowledge base.",
+    )
+    property_value_is_valid: bool = Field(
+      ...,
+        description="Whether the property value is generally valid, judged against the " +
+                    "reference knowledge base.",
+    )
+    error_message: Optional[str] = Field(
+        None, description="The error message if either property_name and/or property_value is not valid."
+    )
+    matching_reference_property: Union[str, None] = Field(
+        ...,
+        description="If the predicted property_name is valid, " +
+                    "you must provide the corresponding property_name in the reference knowledge base." +
+                    "otherwise, provide None."
+    )
+
+
+
+class KnowledgeBase(BaseModel):
+    entity_label: str
+    properties: Dict[str, Any]
+
+
+class EvaluationKB(BaseModel):
+    predicted_knowledge_base: KnowledgeBase = Field(
+        ...,
+        description="The predicted knowledge base that must be evaluated against the reference."
+    )
+    reference_knowledge_base: KnowledgeBase = Field(
+        ..., 
+        description="The reference knowledge base used for evaluating prediction."
+    )
+    validated_properties: List[ValidatedProperty] = []
+
+
+    @model_validator(mode="after")
+    def validate_properties(self, context: str) -> "EvaluationKB":
+
+        existing_pred_properties = list(self.predicted_knowledge_base.properties.keys())
+        existing_ref_properties = list(self.reference_knowledge_base.properties.keys())
+
+        for predicted_property in self.predicted_knowledge_base.properties:
+
+            # EVALUATE ONE PROPERTY
+            resp: ValidatedProperty = client.chat.completions.create(
+                response_model=ValidatedProperty,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"Using your knowledge of the world and the given " +
+                        "reference knowledge base, is the following property valid? " +
+                        f"\nPredicted Property: {predicted_property}" +
+                        f"\n\nReference Knowledge Base: {self.reference_knowledge_base}"
+                    }
+                ],
+                validation_context={
+                    "existing_ref_properties": existing_ref_properties,
+                    "existing_pred_properties": existing_pred_properties,
+                },
+                max_retries=3,
+                model=MODEL,
+            )
+
+            self.validated_properties.append(resp)
+        return self
+
+    @field_validator('validated_properties', mode='after')
+    @classmethod
+    def assert_all_properties_validated(cls, validation_properties: List[ValidatedProperty], info: ValidationInfo):
+        existing_pred_properties = info.context.get("existing_pred_properties")
+        if len(validation_properties) != len(existing_pred_properties):
+            raise ValueError(
+                "Number of properties validated does not match number of properties in the prediction knowledge base. " +
+                "Number of properties validated: {len(validation_properties)}, " +
+                f"Number of properties in the text: {len(existing_pred_properties)}"
+                )
+        return validation_properties
+
+    @field_validator('validated_properties', mode='after')
+    @classmethod
+    def assert_matching_ref_in_ref_kb(cls, validation_properties: List[ValidatedProperty], info: ValidationInfo):
+        '''
+        Make sure that the reference property that is linked to the prediction 
+        actually exists in the reference knowledge base.
+        '''
+        existing_ref_properties = info.context.get("existing_ref_properties")
+        for prop in validation_properties:
+            if prop.property_name_is_valid:
+                if prop.matching_reference_property not in existing_ref_properties:
+                    raise ValueError(
+                        f"The predicted property name {prop.property_name} was marked valid but the matching_reference_property " +
+                        f"{prop.matching_reference_property} does not exist in the reference knowledge base."
+                    )
+        return validation_properties
+
+
+    

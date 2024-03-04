@@ -1,5 +1,6 @@
 import json
 from typing import List, Dict, Union, Any, Optional, Literal
+import os
 
 def read_jsonl(file_path: str):
     """read a JSONL file into a list of JSON objects"""
@@ -60,11 +61,39 @@ def read_nell_sports(file_path) -> List[Dict]:
             triples.append({'subject': subject, 'relation': relation, 'object': object_})
     return triples
 
+def load_mapping(file_path, dataset_name=None):
+    """Load entity or relation to text mapping from a file."""
+    mapping = {}
+    with open(file_path, 'r') as f:
+        for line in f:
+            key, value = line.strip().split('\t')
+            if dataset_name == 'WN18RR':
+                '''e.g entity for WN18RR --> stool, solid excretory product evacuated from the bowels'''
+                value = " ".join(value.split(',')[0])
+            mapping[key] = value
+    return mapping
 
-def read_fb13(file_path) -> List[Dict]:
+def translate_triples(triples, entity_mapping, relation_mapping):
+    """Translate entity and relation IDs in triples to their text representation."""
+    translated_triples = []
+    for triple in triples:
+        translated_triples.append({
+            'subject': entity_mapping.get(triple['subject'], triple['subject']),
+            'relation': relation_mapping.get(triple['relation'], triple['relation']),
+            'object': entity_mapping.get(triple['object'], triple['object']),
+        })
+    return translated_triples
+
+def read_dataset(dataset_name: Literal['FB13', 'WN11', 'WN18RR', 'YAGO3-10']) -> List[Dict]:
     positive_triples = []
     negative_triples = []
-    with open(file_path, 'r') as file:
+    if os.path.exists(f'../../data/{dataset_name}/entity2text_capital.txt'):
+        entity_mapping_path = f'../../data/{dataset_name}/entity2text_capital.txt'
+    else:
+        entity_mapping_path = f'../../data/{dataset_name}/entity2text.txt'
+    ent_mapping = load_mapping(entity_mapping_path, dataset_name)
+    rel_mapping = load_mapping(f'../../data/{dataset_name}/relation2text.txt')
+    with open(f'../../data/{dataset_name}/test.tsv', 'r') as file:
         for line in file:
             parts = line.strip().split('\t')  # Splitting each line by tab
             if len(parts) == 4:  # Ensuring there are exactly four parts
@@ -76,4 +105,7 @@ def read_fb13(file_path) -> List[Dict]:
                 elif sentiment == '-1':
                     negative_triples.append(triple)
     
+    positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
+    negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
     return positive_triples, negative_triples
+

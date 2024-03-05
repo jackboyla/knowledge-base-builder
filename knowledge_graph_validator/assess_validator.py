@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, '../../knowledge_graph_validator')
 import utils
 import validators
+import os
 
 logger = utils.create_logger(__name__)
 
@@ -37,21 +38,19 @@ def sample_triples(triples, num_examples, random_seed=None):
         return triples[:num_examples]
 
 @click.command()
-@click.option('--dataset', required=True, type=click.Choice(['FB13', 'WN11', 'WN18RR', 'YAGO3-10'], case_sensitive=False), help='Dataset name; one of [FB13, WN11, WN18RR, YAGO3-10]')
+@click.option('--dataset', required=True, type=click.Choice(['FB13', 'WN11', 'WN18RR', 'YAGO3-10', 'FB15K-237N', 'CoDeX-S'], case_sensitive=False), help='Dataset name; one of [FB13, WN11, WN18RR, YAGO3-10]')
 @click.option('--num-examples', default=10, type=int, help='Number of examples to evaluate')
 @click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
-@click.option('--save-path', required=True, type=click.Path(), help='Where to save the results')
 @click.option('--reference-context', required=False, type=click.Path(), help='The path to a custom reference context if the `RefKG` or `RefDocs` validator is chosen.')
 @click.option('--context-type', required=True, type=click.Choice(['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'WikidataKGValidator', 'WebKGValidator'], case_sensitive=False), help='Model name')
-def main(dataset, num_examples, random_seed, save_path, reference_context, context_type):
+def main(dataset, num_examples, random_seed, reference_context, context_type):
     """Evaluate a model on a dataset.
 
     usage:
             python assess_validator.py \
-                --dataset FB13 \
+                --dataset CoDeX-S \
                 --num-examples 10 \
                 --random-seed 42 \
-                --save-path ../data/wikidata-context/20results.json \
                 --context-type WikidataKGValidator
     
     """
@@ -77,9 +76,13 @@ def main(dataset, num_examples, random_seed, save_path, reference_context, conte
     neg_results = []
     neg_results.append(v(**{'triples': negative_samples}))
 
+    # saving
     results_json = [r.model_dump() for r in neg_results] + [r.model_dump() for r in pos_results]
-    utils.save_jsonl(results_json, save_path)
-
+    save_dir = Path('../data/results') / f"{dataset}" / f"{context_type}"
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = save_dir / f"{num_examples}_{context_type}_{dataset}_seed{random_seed}.jsonl"
+    utils.save_jsonl(results_json, str(save_path))
+    
     metrics = compute_metrics(pos_results, neg_results)
     logger.info(f"-------------\nMETRICS:\n\n {metrics}\n-------------")
 

@@ -4,6 +4,8 @@ import os
 import sys
 import logging
 import re
+import random
+import copy
 
 
 def create_logger(name):
@@ -98,9 +100,9 @@ def load_mapping(file_path, dataset_name=None):
     with open(file_path, "r") as f:
         for line in f:
             key, value = line.strip().split("\t")
-            if dataset_name == "WN18RR":
-                """e.g entity for WN18RR --> stool, solid excretory product evacuated from the bowels"""
-                value = " ".join(value.split(",")[0])
+            # if dataset_name == "WN18RR":
+            #     """e.g entity for WN18RR --> stool, solid excretory product evacuated from the bowels"""
+            #     value = " ".join(value.split(",")[0])
             mapping[key] = value
     return mapping
 
@@ -148,9 +150,43 @@ def parse_triple(input_str: str) -> Dict[str, str]:
 
     return {"subject": head, "relation": relation, "object": tail}
 
+def negative_sampling(triples):
+    """
+    Performs negative sampling by swapping the object of one triple with another.
+
+    Parameters:
+    triples (list of dicts): A list of dictionaries, each containing 'subject', 'relation', and 'object'.
+
+    Returns:
+    list of dicts: The list of dictionaries after performing negative sampling.
+    """
+    # Ensure there are at least two triples to perform swapping
+    if len(triples) < 2:
+        raise ValueError("There must be at least two triples to perform negative sampling.")
+    
+    # Create a new list to hold the negatively sampled triples
+    sampled_triples = triples[:]
+    
+    for i in range(len(triples)):
+        # Select a random index different from i
+        swap_index = i
+        while swap_index == i:
+            swap_index = random.randint(0, len(triples) - 1)
+        
+        # Swap the 'object' of the current triple with the 'object' of the randomly selected triple
+        sampled_triples[i]['object'], sampled_triples[swap_index]['object'] = sampled_triples[swap_index]['object'], sampled_triples[i]['object']
+    
+    return sampled_triples
 
 def read_dataset(
-    dataset_name: Literal["FB13", "WN11", "WN18RR", "YAGO3-10", "FB15K-237N", "CoDeX-S"]) -> List[Dict]:
+    dataset_name: Literal[
+        "FB13", 
+        "WN11", 
+        "WN18RR", 
+        "YAGO3-10", 
+        "FB15K-237N", 
+        "CoDeX-S",
+        "UMLS"]) -> List[Dict]:
     positive_triples = []
     negative_triples = []
     logger.info(f"Reading dataset {dataset_name}...")
@@ -167,18 +203,18 @@ def read_dataset(
         with open(f"../data/{dataset_name}/test.tsv", "r") as file:
             for line in file:
                 parts = line.strip().split("\t")  # Splitting each line by tab
-                if len(parts) == 4:  # Ensuring there are exactly four parts
-                    subject, relation, object_, sentiment = parts
-                    triple = {
-                        "subject": subject,
-                        "relation": relation,
-                        "object": object_,
-                    }
+                assert len(parts) == 4  # Ensuring there are exactly four parts
+                subject, relation, object_, sentiment = parts
+                triple = {
+                    "subject": subject,
+                    "relation": relation,
+                    "object": object_,
+                }
 
-                    if sentiment == "1":
-                        positive_triples.append(triple)
-                    elif sentiment == "-1":
-                        negative_triples.append(triple)
+                if sentiment == "1":
+                    positive_triples.append(triple)
+                elif sentiment == "-1":
+                    negative_triples.append(triple)
                         
         positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
         negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
@@ -211,6 +247,37 @@ def read_dataset(
                 assert (
                     len(triple) == 3
                 ), f"Triple parts should have length 3, but have {len(triple)} instead: {triple}"
+
+    elif dataset_name in ["WN18RR", "UMLS", "YAGO3-10"]:
+
+        if os.path.exists(f"../data/{dataset_name}/entity2text_capital.txt"):
+            entity_mapping_path = f"../data/{dataset_name}/entity2text_capital.txt"
+        else:
+            entity_mapping_path = f"../data/{dataset_name}/entity2text.txt"
+        ent_mapping = load_mapping(entity_mapping_path, dataset_name)
+        rel_mapping = load_mapping(f"../data/{dataset_name}/relation2text.txt")
+
+        data_file_path = f"../data/{dataset_name}/test.tsv"
+
+        triples = []
+        with open(data_file_path, "r") as file:
+            for line in file:
+                parts = line.strip().split("\t")  # Splitting each line by tab
+                assert len(parts) == 3
+                subject, relation, object_ = parts
+                triple = {
+                    "subject": subject,
+                    "relation": relation,
+                    "object": object_,
+                }
+                triples.append(triple)
+
+        positive_triples = copy.deepcopy(triples)
+        negative_triples = negative_sampling(triples)
+                        
+        positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
+        negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
+
 
     save_jsonl(positive_triples, f"pos_tmp.jsonl")
     save_jsonl(negative_triples, f"neg_tmp.jsonl")

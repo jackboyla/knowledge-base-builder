@@ -54,10 +54,10 @@ def main(dataset, num_examples, random_seed, reference_context, context_type):
 
     usage:
             python assess_validator.py \
-                --dataset FB15K-237N \
+                --dataset CoDeX-S \
                 --num-examples 100 \
                 --random-seed 42 \
-                --context-type WikidataWebKGValidator
+                --context-type WebKGValidator
     
     """
 
@@ -72,7 +72,7 @@ def main(dataset, num_examples, random_seed, reference_context, context_type):
         # 'ReferenceKGValidator': validators.ReferenceKGValidator,
         # 'ReferenceDocumentKGValidator': ReferenceDocumentKGValidator,
         'WikidataKGValidator': validators.WikidataKGValidator,
-        'WebSearch': validators.WebKGValidator,
+        'WebKGValidator': validators.WebKGValidator,
     }
     v = evaluators[context_type]
 

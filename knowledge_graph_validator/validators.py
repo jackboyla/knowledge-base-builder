@@ -34,17 +34,6 @@ class ValidatedTriple(BaseModel, extra='allow'):
     reason: str = Field(
         None, description="The reason why the predicted subject-relation-object triple is or is not valid."
     )
-    # is_valid_reason: Optional[str] = Field(
-    #     None, description="The reason why the subject-relation-object triple is valid, if it is indeed valid."
-    # )
-    # error_message: Optional[str] = Field(
-    #     None, description="The error message if the subject-relation-object triple is not valid."
-    # )
-
-    # @model_validator(mode='after')
-    # def assert_decision_is_made(self, info: ValidationInfo):
-    #     assert self.is_valid_reason is not None or self.error_message is None, "Fields `is_valid_reason` and `error_message` cannot both be filled."
-    #     return self
 
 
 @staticmethod
@@ -59,16 +48,12 @@ def validate_statement_with_context(entity_label, predicted_property_name, predi
         response_model=ValidatedTriple,
         messages=[
             {
-                "role": "system",
-                "content": "You are a Knowledge Graph Completion triple evaluator."
-            },
-            {
                 "role": "user",
                 "content": f"Using your knowledge of the world and the given context as a reference, " +
                         "evaluate the predicted triple for its accuracy by considering: " +
                         "1. Definitions and relevance of key terms, " +
                         "2. Historical and factual validity, " +
-                        "3. Synonyms or related terms appropriateness, " +
+                        "3. Synonyms or related terms appropriateness (i.e, is the prediction 'close enough'), " +
                         "4. Nuances and implications of the terms. " +
                         "5. Any facts you can glean from the context. " +
                         "Acknowledge a range of correct answers where appropriate. " +
@@ -100,16 +85,12 @@ def validate_statement_with_no_context(entity_label, predicted_property_name, pr
         response_model=ValidatedTriple,
         messages=[
             {
-                "role": "system",
-                "content": "You are a Knowledge Graph Completion triple evaluator."
-            },
-            {
                 "role": "user",
                 "content": f"Using your knowledge of the world, " +
                         "evaluate the predicted triple for its accuracy by considering: " +
                         "1. Definitions and relevance of key terms, " +
                         "2. Historical and factual validity, " +
-                        "3. Synonyms or related terms appropriateness, " +
+                        "3. Synonyms or related terms appropriateness (i.e, is the prediction 'close enough'), " +
                         "4. Nuances and implications of the terms. " +
                         "5. Any facts you kniw about the entity. " +
                         "Acknowledge a range of correct answers where appropriate. " +

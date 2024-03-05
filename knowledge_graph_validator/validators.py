@@ -166,7 +166,7 @@ class WebKGValidator(BaseModel):
             web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
 
             # EVALUATE ONE PROPERTY
-            resp = WebKGValidator.validate_statement_with_context(
+            resp = validate_statement_with_context(
                 entity_label=subject, 
                 predicted_property_name=relation, 
                 predicted_property_value=object, 
@@ -241,6 +241,8 @@ class WikidataKGValidator(BaseModel):
                 predicted_property_value=object, 
                 context=wikidata_reference
             )
+            resp.sources = [wikidata_reference]
+            resp.candidate_triple = triple
 
             self['validated_triples'].append(resp)
 
@@ -293,3 +295,70 @@ class WorldKnowledgeKGValidator(BaseModel):
                 f"Number of properties in the text: {len(self.triples)}"
                 )
         return self
+    
+
+
+class WikidataWebKGValidator(BaseModel):
+    ''' Validate triples with LLM's inherent knowledge +  wikidata + web search results'''
+
+    triples: List
+    validated_triples: List[ValidatedProperty] = []
+
+
+    @staticmethod
+    def get_web_search_results(search_tool, query):
+        hits = search_tool.text(query, max_results=5)
+        return [h for h in hits]
+
+
+    @staticmethod
+    def create_query(subject, relation, object):
+        '''Create a query for the web search engine'''
+        # subject = " ".join(word.capitalize() for word in subject.split("_"))
+        # relation = " ".join(relation.split("_"))
+        search_query = f"What {subject} {relation}?"
+        return search_query
+
+    @model_validator(mode='before')
+    def validate(self, context) -> "WikidataWebKGValidator":
+
+        self['validated_triples'] = []
+
+        search_tool = DDGS()
+        wrapper = WikidataAPIWrapper()
+        wrapper.top_k_results = 1
+        wikidata_wrapper = WikidataQueryRun(api_wrapper=wrapper)
+
+        for triple in tqdm(self['triples']):
+
+            subject, relation, object = triple['subject'], triple['relation'], triple['object']
+
+            search_query = WebKGValidator.create_query(subject, relation, object)
+            web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
+            wikidata_reference = WikidataKGValidator.get_wikidata(subject, wikidata_wrapper)
+
+            # EVALUATE ONE PROPERTY
+            resp = validate_statement_with_context(
+                entity_label=subject, 
+                predicted_property_name=relation, 
+                predicted_property_value=object, 
+                context={'web_reference': web_reference, 'wikidata_reference': wikidata_reference}
+            )
+            resp.sources = {'web_reference': web_reference, 'wikidata_reference': wikidata_reference}
+            resp.candidate_triple = triple
+
+            self['validated_triples'].append(resp)
+        return self
+
+
+    @model_validator(mode='after')
+    def assert_all_triples_validated(self, info: ValidationInfo):
+        if len(self.validated_triples) != len(self.triples):
+            raise ValueError(
+                "Number of properties validated does not match number of properties in the prediction knowledge base. " +
+                f"Number of properties validated: {len(self.validated_triples)}, " +
+                f"Number of properties in the text: {len(self.triples)}"
+                )
+        return self
+
+            

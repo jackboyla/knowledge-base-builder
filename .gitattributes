@@ -1,0 +1,2 @@
+data/CoDeX-S filter=lfs diff=lfs merge=lfs -text
+data/FB15K-237N filter=lfs diff=lfs merge=lfs -text

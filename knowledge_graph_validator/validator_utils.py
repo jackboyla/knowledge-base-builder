@@ -58,3 +58,21 @@ def retrieve_relevant_property(entity_name, property_name, vectorstore, retrieve
 
     relevant_property = sub_docs[0].page_content
     return relevant_property
+
+
+@staticmethod
+def retrieve_relevant_chunk(subject, relation, vectorstore, retriever):
+    '''Fetch the most similar chunk to subject + relation name'''
+
+    query = f"{subject} {relation}"
+
+    sub_docs = vectorstore.similarity_search(query)
+
+    # if there is a parent doc chunk, use that, 
+    #otherwise use the sub doc chunk
+    parent_chunk = retriever.get_relevant_documents(query)
+    if len(parent_chunk) > 0:
+        relevant_chunk = parent_chunk[0].page_content
+    else:
+        relevant_chunk = sub_docs[0].page_content
+    return relevant_chunk

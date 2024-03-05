@@ -16,10 +16,7 @@ from tqdm import tqdm
 from wikidata_search import WikidataSearch, get_all_properties_with_labels
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
 
-from validator_utils import (
-    create_parent_document_retriever,
-    retrieve_relevant_property,
-)
+import validator_utils
 
 client = instructor.patch(OpenAI(api_key=os.environ['OPENAI_API_KEY']))
 MODEL = "gpt-3.5-turbo-0125"
@@ -349,4 +346,48 @@ class WikidataWebKGValidator(BaseModel):
                 )
         return self
 
-            
+
+
+class TextContextKGValidator(BaseModel):
+    ''' Validate triples with LLM's inherent knowledge + given textual context '''
+
+    triples: List
+    validated_triples: List[ValidatedTriple] = []
+
+
+
+    @model_validator(mode='before')
+    def validate(self, context) -> "TextContextKGValidator":
+
+        # create the document store
+        docs = [Document(d) for d in self['documents']]
+        retriever, store, vectorstore = validator_utils.create_parent_document_retriever(docs)
+
+        self['validated_triples'] = []
+
+        for triple in tqdm(self['triples']):
+
+            subject, relation, object = triple['subject'], triple['relation'], triple['object']
+
+            relevant_chunk = validator_utils.retrieve_relevant_chunk(
+                entity_name=self['entity_label'],
+                property_name=subject, 
+                vectorstore=vectorstore,
+                retriever=retriever
+            )
+
+
+            # EVALUATE ONE PROPERTY
+            resp = validate_statement_with_context(
+                entity_label=subject, 
+                predicted_property_name=relation, 
+                predicted_property_value=object, 
+                context=relevant_chunk
+            )
+            resp.sources = [relevant_chunk]
+            resp.candidate_triple = triple
+
+            self['validated_triples'].append(resp)
+
+        return self
+    

@@ -1,3 +1,7 @@
+'''
+Utility functions for KG Validators
+'''
+
 import pandas as pd
 from pydantic import BaseModel, model_validator, field_validator, Field, ValidationInfo, Extra
 from typing import List, Dict, Union, Any, Optional, Literal

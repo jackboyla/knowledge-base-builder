@@ -25,7 +25,7 @@ client = instructor.patch(OpenAI(api_key=os.environ['OPENAI_API_KEY']))
 MODEL = "gpt-3.5-turbo-0125"
 
 
-class ValidatedProperty(BaseModel, extra='allow'):
+class ValidatedTriple(BaseModel, extra='allow'):
     subject_name: str
     relation: str
     object_name: Any
@@ -58,8 +58,8 @@ def validate_statement_with_context(entity_label, predicted_property_name, predi
                             e.g Donald Trump --> wife --> Ivanka Trump
     
     '''
-    resp: ValidatedProperty = client.chat.completions.create(
-        response_model=ValidatedProperty,
+    resp: ValidatedTriple = client.chat.completions.create(
+        response_model=ValidatedTriple,
         messages=[
             {
                 "role": "system",
@@ -68,16 +68,17 @@ def validate_statement_with_context(entity_label, predicted_property_name, predi
             {
                 "role": "user",
                 "content": f"Using your knowledge of the world and the given context as a reference, " +
-                        "evaluate the predicted property for its accuracy by considering: " +
+                        "evaluate the predicted triple for its accuracy by considering: " +
                         "1. Definitions and relevance of key terms, " +
                         "2. Historical and factual validity, " +
                         "3. Synonyms or related terms appropriateness, " +
                         "4. Nuances and implications of the terms. " +
                         "5. Any facts you can glean from the context. " +
                         "Acknowledge a range of correct answers where appropriate. " +
-                        f"\nEntity Label: {entity_label}" +
-                        f"\nPredicted Property Name: {predicted_property_name}" +
-                        f"\nPredicted Property Value: {predicted_property_value}" +
+                        "If multiple relations are provided please consider them all individually." +
+                        f"\nSubject Name: {entity_label}" +
+                        f"\nPredicted Relation: {predicted_property_name}" +
+                        f"\nPredicted Object Name: {predicted_property_value}" +
                         f"\n\nContext: {context}" +
                         "Use this approach to recognize a range of correct answers when nuances and context allow for it."
             }
@@ -98,8 +99,8 @@ def validate_statement_with_no_context(entity_label, predicted_property_name, pr
                             e.g Donald Trump --> wife --> Ivanka Trump
     
     '''
-    resp: ValidatedProperty = client.chat.completions.create(
-        response_model=ValidatedProperty,
+    resp: ValidatedTriple = client.chat.completions.create(
+        response_model=ValidatedTriple,
         messages=[
             {
                 "role": "system",
@@ -108,13 +109,14 @@ def validate_statement_with_no_context(entity_label, predicted_property_name, pr
             {
                 "role": "user",
                 "content": f"Using your knowledge of the world, " +
-                        "evaluate the predicted property for its accuracy by considering: " +
+                        "evaluate the predicted triple for its accuracy by considering: " +
                         "1. Definitions and relevance of key terms, " +
                         "2. Historical and factual validity, " +
                         "3. Synonyms or related terms appropriateness, " +
                         "4. Nuances and implications of the terms. " +
                         "5. Any facts you kniw about the entity. " +
                         "Acknowledge a range of correct answers where appropriate. " +
+                        "If multiple relations are provided please consider them all individually." +
                         f"\nSubject Name: {entity_label}" +
                         f"\nPredicted Relation: {predicted_property_name}" +
                         f"\nPredicted Object Name: {predicted_property_value}" +
@@ -133,7 +135,7 @@ class WebKGValidator(BaseModel):
     ''' Validate triples with LLM's inherent knowledge + web search results'''
 
     triples: List
-    validated_triples: List[ValidatedProperty] = []
+    validated_triples: List[ValidatedTriple] = []
 
 
     @staticmethod
@@ -147,7 +149,7 @@ class WebKGValidator(BaseModel):
         '''Create a query for the web search engine'''
         # subject = " ".join(word.capitalize() for word in subject.split("_"))
         # relation = " ".join(relation.split("_"))
-        search_query = f"What {subject} {relation}?"
+        search_query = f"What {subject} {relation} {object}?"
         return search_query
 
     @model_validator(mode='before')
@@ -196,7 +198,7 @@ class WikidataKGValidator(BaseModel):
     ''' Validate triples with LLM's inherent knowledge + Wikidata'''
 
     triples: List
-    validated_triples: List[ValidatedProperty] = []
+    validated_triples: List[ValidatedTriple] = []
 
 
     @staticmethod
@@ -264,7 +266,7 @@ class WorldKnowledgeKGValidator(BaseModel):
     ''' Validate triples with LLM's inherent knowledge'''
 
     triples: List
-    validated_triples: List[ValidatedProperty] = []
+    validated_triples: List[ValidatedTriple] = []
 
     @model_validator(mode='before')
     def validate(self, context) -> "WorldKnowledgeKGValidator":
@@ -302,22 +304,8 @@ class WikidataWebKGValidator(BaseModel):
     ''' Validate triples with LLM's inherent knowledge +  wikidata + web search results'''
 
     triples: List
-    validated_triples: List[ValidatedProperty] = []
+    validated_triples: List[ValidatedTriple] = []
 
-
-    @staticmethod
-    def get_web_search_results(search_tool, query):
-        hits = search_tool.text(query, max_results=5)
-        return [h for h in hits]
-
-
-    @staticmethod
-    def create_query(subject, relation, object):
-        '''Create a query for the web search engine'''
-        # subject = " ".join(word.capitalize() for word in subject.split("_"))
-        # relation = " ".join(relation.split("_"))
-        search_query = f"What {subject} {relation}?"
-        return search_query
 
     @model_validator(mode='before')
     def validate(self, context) -> "WikidataWebKGValidator":

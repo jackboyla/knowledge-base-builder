@@ -144,6 +144,7 @@ def parse_triple(input_str: str) -> Dict[str, str]:
     # Cleaning up the head and tail
     head = head.strip(" (\n")
     tail = tail.strip(" )\n")
+    relation = relation.split(" ")
 
     return {"subject": head, "relation": relation, "object": tail}
 
@@ -189,8 +190,10 @@ def read_dataset(
             data = json.load(file)
 
             for item in data:
-                input_triple = item["input"]
+                input_triple = item["input"].split('\n')[2]
                 output = item["output"]
+
+                # import ipdb;ipdb.set_trace()
 
                 try:
                     triple = parse_triple(input_triple)
@@ -199,6 +202,8 @@ def read_dataset(
                         positive_triples.append(triple)
                     elif output == "False":
                         negative_triples.append(triple)
+                    else:
+                        logger.info(f"Output {output} is not recognized. Skipping.")
                 except ValueError as e:
                     print(f"Error parsing triple: {e}")
                     continue
@@ -207,11 +212,7 @@ def read_dataset(
                     len(triple) == 3
                 ), f"Triple parts should have length 3, but have {len(triple)} instead: {triple}"
 
-                if output == "True":
-                    positive_triples.append(triple)
-                elif output == "False":
-                    negative_triples.append(triple)
-                else:
-                    logger.info(f"Output {output} is not recognized. Skipping.")
+    save_jsonl(positive_triples, f"pos_tmp.jsonl")
+    save_jsonl(negative_triples, f"neg_tmp.jsonl")
 
     return positive_triples, negative_triples

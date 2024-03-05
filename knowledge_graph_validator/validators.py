@@ -23,16 +23,16 @@ MODEL = "gpt-3.5-turbo-0125"
 
 
 class ValidatedTriple(BaseModel, extra='allow'):
-    subject_name: str
-    relation: str
-    object_name: Any
+    predicted_subject_name: str
+    predicted_relation: Union[str, List[str]]
+    predicted_object_name: Any
 
     triple_is_valid: Literal[True, False, "Not enough information to say"] = Field(
       ...,
-        description="Whether the subject-relation-object triple is generally valid, according to the previously stated rules.",
+        description="Whether the predicted subject-relation-object triple is generally valid, according to the previously stated rules.",
     )
     reason: str = Field(
-        None, description="The reason why the subject-relation-object triple is or is not valid."
+        None, description="The reason why the predicted subject-relation-object triple is or is not valid."
     )
     # is_valid_reason: Optional[str] = Field(
     #     None, description="The reason why the subject-relation-object triple is valid, if it is indeed valid."

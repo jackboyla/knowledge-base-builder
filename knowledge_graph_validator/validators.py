@@ -115,9 +115,9 @@ def validate_statement_with_no_context(entity_label, predicted_property_name, pr
                         "4. Nuances and implications of the terms. " +
                         "5. Any facts you kniw about the entity. " +
                         "Acknowledge a range of correct answers where appropriate. " +
-                        f"\nEntity Label: {entity_label}" +
-                        f"\nPredicted Property Name: {predicted_property_name}" +
-                        f"\nPredicted Property Value: {predicted_property_value}" +
+                        f"\nSubject Name: {entity_label}" +
+                        f"\nPredicted Relation: {predicted_property_name}" +
+                        f"\nPredicted Object Name: {predicted_property_value}" +
                         "Use this approach to recognize a range of correct answers when nuances and context allow for it."
             }
         ],

@@ -10,6 +10,7 @@ from duckduckgo_search import DDGS
 from tqdm import tqdm
 from wikidata_search import WikidataSearch, get_all_properties_with_labels
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
+import wikidata_search
 
 import validator_utils
 import utils
@@ -46,7 +47,7 @@ def validate_reasoning(values):
 class ValidatedTriple(BaseModel, extra='allow'):
     predicted_subject_name: str
     predicted_relation: Union[str, List[str]]
-    predicted_object_name: Any
+    predicted_object_name: str
 
     triple_is_valid: Literal[True, False, "Not enough information to say"] = Field(
       ...,
@@ -384,12 +385,130 @@ class WikidataWebKGValidator(BaseModel):
 
 
 
+class ReferenceKGValidator(BaseModel):
+    ''' Validate triples with LLM's inherent knowledge +  given reference KG
+    
+        reference_knowledge_graph must be List of triples [{'subject': ..., 'relation': ..., 'object': ...}, ]
+    '''
+
+    triples: List
+    validated_triples: List[ValidatedTriple] = []
+    reference_knowledge_graph: List[Dict]
+
+    @model_validator(mode='before')
+    def validate(self, context) -> "ReferenceKGValidator":
+
+        self['validated_triples'] = []
+
+        wrapper = WikidataAPIWrapper()
+        wrapper.top_k_results = 3
+        wikidata_wrapper = WikidataQueryRun(api_wrapper=wrapper)
+
+
+        for triple in tqdm(self['triples']):
+
+            subject, relation, object = triple['subject'], triple['relation'], triple['object']
+
+            wikidata_reference = WikidataKGValidator.get_wikidata(subject, wikidata_wrapper)
+
+            relevant_triples = validator_utils.retrieve_relevant_triples(triple['subject'], self['reference_knowledge_graph'])
+
+            # EVALUATE ONE PROPERTY
+            resp = validate_statement_with_context(
+                entity_label=subject, 
+                predicted_property_name=relation, 
+                predicted_property_value=object, 
+                context={'reference knowledge graph': relevant_triples}
+            )
+            resp.sources = {'reference knowledge graph': relevant_triples, 'wikidata_reference': wikidata_reference}
+            resp.candidate_triple = triple
+
+            self['validated_triples'].append(resp)
+        return self
+
+
+    @model_validator(mode='after')
+    def assert_all_triples_validated(self, info: ValidationInfo):
+        if len(self.validated_triples) != len(self.triples):
+            raise ValueError(
+                "Number of properties validated does not match number of properties in the prediction knowledge base. " +
+                f"Number of properties validated: {len(self.validated_triples)}, " +
+                f"Number of properties in the text: {len(self.triples)}"
+                )
+        return self
+    
+
+class WikipediaKGValidator(BaseModel):
+    ''' Validate triples with LLM's inherent knowledge +  Wikipedia + Wikidata as context
+    
+    '''
+
+    triples: List
+    validated_triples: List[ValidatedTriple] = []
+
+    @model_validator(mode='before')
+    def validate(self, context) -> "WikipediaKGValidator":
+
+        self['validated_triples'] = []
+
+        wrapper = WikidataAPIWrapper()
+        wrapper.top_k_results = 3
+        wikidata_wrapper = WikidataQueryRun(api_wrapper=wrapper)
+
+
+        for triple in tqdm(self['triples']):
+
+            subject, relation, object = triple['subject'], triple['relation'], triple['object']
+
+            wikidata_reference = WikidataKGValidator.get_wikidata(subject, wikidata_wrapper)
+
+            wikidata_ids = wikidata_search.get_wikidata_qids(triple['subject'])
+            if len(wikidata_ids) > 0:
+                wikipedia_content = wikidata_search.fetch_wikipedia_page_content(wikidata_ids[0]['id'])
+
+            # logger.info(f"Constructing vectorstore for the reference context...")
+            reference = [Document(wikipedia_content)]
+            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(reference)
+            # logger.info(f"Vectorstore built!")
+
+            relevant_chunks = validator_utils.retrieve_relevant_chunks(
+                query=f"{triple['subject']} {triple['relation']} {triple['object']}", 
+                vectorstore=vectorstore,
+                retriever=retriever,
+            )
+            reference_context = {'relevant_text': relevant_chunks, 'wikidata_reference': wikidata_reference}
+
+            # EVALUATE ONE PROPERTY
+            resp = validate_statement_with_context(
+                entity_label=subject, 
+                predicted_property_name=relation, 
+                predicted_property_value=object, 
+                context=reference_context
+            )
+            resp.sources = reference_context
+            resp.candidate_triple = triple
+
+            self['validated_triples'].append(resp)
+        return self
+
+
+    @model_validator(mode='after')
+    def assert_all_triples_validated(self, info: ValidationInfo):
+        if len(self.validated_triples) != len(self.triples):
+            raise ValueError(
+                "Number of properties validated does not match number of properties in the prediction knowledge base. " +
+                f"Number of properties validated: {len(self.validated_triples)}, " +
+                f"Number of properties in the text: {len(self.triples)}"
+                )
+        return self
+
+
+
 class TextContextKGValidator(BaseModel):
     ''' Validate triples with LLM's inherent knowledge + given textual context '''
 
     triples: List
     validated_triples: List[ValidatedTriple] = []
-
 
 
     @model_validator(mode='before')
@@ -405,12 +524,12 @@ class TextContextKGValidator(BaseModel):
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
-            relevant_chunk = validator_utils.retrieve_relevant_chunk(
-                entity_name=self['entity_label'],
-                property_name=subject, 
+            relevant_chunks = validator_utils.retrieve_relevant_chunks(
+                query=f"{triple['subject']} {triple['relation']} {triple['object']}", 
                 vectorstore=vectorstore,
-                retriever=retriever
+                retriever=retriever,
             )
+            reference_context = {'relevant_text': relevant_chunks}
 
 
             # EVALUATE ONE PROPERTY
@@ -418,9 +537,9 @@ class TextContextKGValidator(BaseModel):
                 entity_label=subject, 
                 predicted_property_name=relation, 
                 predicted_property_value=object, 
-                context=relevant_chunk
+                context=reference_context
             )
-            resp.sources = [relevant_chunk]
+            resp.sources = reference_context
             resp.candidate_triple = triple
 
             self['validated_triples'].append(resp)

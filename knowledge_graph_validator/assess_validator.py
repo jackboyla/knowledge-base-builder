@@ -43,37 +43,34 @@ def sample_triples(triples, num_examples, random_seed=None):
     ), help='Dataset name; one of [FB13, UMLS, WN11, WN18RR, Wiki27K, YAGO3-10, FB15K-237-N, CoDeX-S]')
 @click.option('--num-examples', default=10, type=int, help='Number of examples to evaluate')
 @click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
-@click.option('--reference-context', required=False, type=click.Path(), help='The path to a custom reference context if the `RefKG` or `RefDocs` validator is chosen.')
 @click.option('--model', required=True, type=click.Choice(['gpt-4-1106-preview', 'gpt-3.5-turbo-0125'], case_sensitive=False), help='The model to use as validator.')
 @click.option('--context-type', required=True, type=click.Choice(
-    ['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'ReferenceDocumentKGValidator', 'WikidataKGValidator', 'WebKGValidator', 'WikidataWebKGValidator'], 
+    ['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'TextContextKGValidator', 'WikidataKGValidator', 'WebKGValidator', 'WikidataWebKGValidator', 'WikipediaKGValidator'], 
     case_sensitive=False
     ), help='Model name')
-def main(dataset, num_examples, random_seed, reference_context, model, context_type):
+def main(dataset, num_examples, random_seed, model, context_type):
     """Evaluate a model on a dataset.
 
     usage:
                 python assess_validator.py \
                     --dataset CoDeX-S \
-                    --num-examples 100 \
+                    --num-examples 50 \
                     --random-seed 23 \
                     --model gpt-3.5-turbo-0125 \
-                    --context-type WikidataWebKGValidator
+                    --context-type WikipediaKGValidator \
         
     """
     os.environ['VALIDATION_MODEL'] = model
     import validators
-
-    if context_type in ['ReferenceKGValidator', 'ReferenceDocumentKGValidator']:
-        assert reference_context is not None, "You must provide a path to a reference context if you choose a reference context validator."
 
     positive_triples, negative_triples = utils.read_dataset(dataset)
 
     evaluators = {
         'WorldKnowledgeKGValidator': validators.WorldKnowledgeKGValidator,
         'WikidataWebKGValidator': validators.WikidataWebKGValidator,
-        # 'ReferenceKGValidator': validators.ReferenceKGValidator,
-        # 'ReferenceDocumentKGValidator': ReferenceDocumentKGValidator,
+        'ReferenceKGValidator': validators.ReferenceKGValidator,
+        'TextContextKGValidator': validators.TextContextKGValidator,
+        'WikipediaKGValidator': validators.WikipediaKGValidator,
         'WikidataKGValidator': validators.WikidataKGValidator,
         'WebKGValidator': validators.WebKGValidator,
     }
@@ -81,13 +78,27 @@ def main(dataset, num_examples, random_seed, reference_context, model, context_t
 
     positive_samples = sample_triples(positive_triples, num_examples//2, random_seed)
     negative_samples = sample_triples(negative_triples, num_examples//2, random_seed)
+    positive_samples = {'triples': positive_samples}
+    negative_samples = {'triples': negative_samples}
+
+
+    if context_type in ['ReferenceKGValidator']:
+
+        '''assuming a path to the reference KG for a given dataset exists'''
+        reference_kg = utils.read_reference_kg(dataset)
+        negative_samples['reference_knowledge_graph'] = reference_kg
+        positive_samples['reference_knowledge_graph'] = reference_kg
+
+    if context_type in ['TextContextKGValidator']:
+        pass
+
 
     logger.info("Evaluating on positive samples")
     pos_results = []
-    pos_results.append(v(**{'triples': positive_samples}))
+    pos_results.append(v(**positive_samples))
     logger.info("Evaluating on negative samples")
     neg_results = []
-    neg_results.append(v(**{'triples': negative_samples}))
+    neg_results.append(v(**negative_samples))
 
     # saving
     results_json = [r.model_dump() for r in neg_results] + [r.model_dump() for r in pos_results]

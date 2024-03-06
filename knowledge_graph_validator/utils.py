@@ -372,3 +372,41 @@ def read_dataset(
     save_jsonl(negative_triples, f"neg_tmp.jsonl")
 
     return positive_triples, negative_triples
+
+
+
+def read_reference_kg(dataset_name):
+
+    reference_kg = []
+    negative_triples = []
+
+    if dataset_name in ["CoDeX-S"]:
+        data_file_path = f"../data/{dataset_name}/{dataset_name}-valid.json"
+        logger.info(f"Loading context from {data_file_path}...")
+
+        with open(data_file_path, "r") as file:
+            data = json.load(file)
+
+            for item in data:
+                input_triple = item["input"].split('\n')[2]
+                output = item["output"]
+
+                try:
+                    triple = parse_triple(input_triple, dataset_name)
+
+                    if output == "True":
+                        reference_kg.append(triple)
+                    elif output == "False":
+                        negative_triples.append(triple)
+                    else:
+                        logger.info(f"Output {output} is not recognized. Skipping.")
+                except ValueError as e:
+                    print(f"Error parsing triple: {e}")
+                    continue
+
+                assert (
+                    len(triple) == 3
+                ), f"Triple parts should have length 3, but have {len(triple)} instead: {triple}"
+
+    
+    return reference_kg

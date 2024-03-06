@@ -107,17 +107,16 @@ def load_mapping(file_path, dataset_name=None):
     return mapping
 
 
-def translate_triples(triples, entity_mapping, relation_mapping):
+def translate_triples(triples, entity_mapping=None, relation_mapping=None):
     """Translate entity and relation IDs in triples to their text representation."""
     translated_triples = []
     for triple in triples:
         translated_triples.append(
             {
-                "subject": entity_mapping.get(triple["subject"], triple["subject"]),
+                "subject": entity_mapping.get(triple["subject"]) if entity_mapping else triple["subject"],
                 "relation": relation_mapping.get(
-                    triple["relation"], triple["relation"]
-                ),
-                "object": entity_mapping.get(triple["object"], triple["object"]),
+                    triple["relation"]) if relation_mapping else triple["relation"],
+                "object": entity_mapping.get(triple["object"]) if entity_mapping else triple["subject"],
             }
         )
     return translated_triples
@@ -203,7 +202,7 @@ def read_dataset(
         "WN11", 
         "WN18RR", 
         "YAGO3-10", 
-        "FB15K-237N", 
+        "FB15K-237-N", 
         "CoDeX-S",
         "UMLS"]) -> List[Dict]:
     positive_triples = []
@@ -238,7 +237,7 @@ def read_dataset(
         positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
         negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
 
-    elif dataset_name in ["FB15K-237N", "CoDeX-S"]:
+    elif dataset_name in ["CoDeX-S"]:  # "FB15K-237N", 
         data_file_path = f"../data/{dataset_name}/{dataset_name}-test.json"
 
         with open(data_file_path, "r") as file:
@@ -296,6 +295,43 @@ def read_dataset(
                         
         positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
         negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
+
+
+    elif dataset_name in ["FB15K-237-N"]:
+
+        def process_fb15k_file(file) -> List[Dict]:
+            triples = []
+            for line in file:
+                parts = line.strip().split("\t")  # Splitting each line by tab
+                assert len(parts) == 3
+                subject, relation, object_ = parts
+                relation = relation.replace('.', '')
+                relation = relation.replace('_', '')
+                relation = relation.split('/')[1:]   #  [1:] because relation starts with `/` e.g  /people/person/nationality
+                triple = {
+                    "subject": subject,
+                    "relation": relation,
+                    "object": object_,
+                }
+                triples.append(triple)
+            return triples
+
+
+        entity_mapping_path = f"../data/{dataset_name}/entity2label.txt"
+        ent_mapping = load_mapping(entity_mapping_path, dataset_name)
+
+        with open(f"../data/{dataset_name}/o_test_pos.txt", "r") as file:
+
+            positive_triples = process_fb15k_file(file)
+
+        with open(f"../data/{dataset_name}/o_test_neg.txt", "r") as file:
+
+            negative_triples = process_fb15k_file(file)
+
+                        
+        positive_triples = translate_triples(positive_triples, ent_mapping)
+        negative_triples = translate_triples(negative_triples, ent_mapping)
+    
 
 
     save_jsonl(positive_triples, f"pos_tmp.jsonl")

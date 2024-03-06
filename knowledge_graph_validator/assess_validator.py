@@ -38,9 +38,9 @@ def sample_triples(triples, num_examples, random_seed=None):
 
 @click.command()
 @click.option('--dataset', required=True, type=click.Choice(
-    ['FB13', 'UMLS', 'WN11', 'WN18RR', 'YAGO3-10', 'FB15K-237N', 'CoDeX-S'], 
+    ['FB13', 'UMLS', 'WN11', 'WN18RR', 'YAGO3-10', 'FB15K-237-N', 'CoDeX-S'], 
     case_sensitive=False
-    ), help='Dataset name; one of [FB13, UMLS, WN11, WN18RR, YAGO3-10, FB15K-237N, CoDeX-S]')
+    ), help='Dataset name; one of [FB13, UMLS, WN11, WN18RR, YAGO3-10, FB15K-237-N, CoDeX-S]')
 @click.option('--num-examples', default=10, type=int, help='Number of examples to evaluate')
 @click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
 @click.option('--reference-context', required=False, type=click.Path(), help='The path to a custom reference context if the `RefKG` or `RefDocs` validator is chosen.')
@@ -54,9 +54,9 @@ def main(dataset, num_examples, random_seed, reference_context, model, context_t
 
     usage:
                 python assess_validator.py \
-                    --dataset CoDeX-S \
+                    --dataset FB15K-237-N \
                     --num-examples 100 \
-                    --random-seed 12 \
+                    --random-seed 23 \
                     --model gpt-3.5-turbo-0125 \
                     --context-type WikidataWebKGValidator
         

@@ -59,20 +59,34 @@ def retrieve_relevant_property(entity_name, property_name, vectorstore, retrieve
     relevant_property = sub_docs[0].page_content
     return relevant_property
 
+@staticmethod
+def retrieve_fuzzy_triples(query, vectorstore, retriever, reference_kg: List[Dict], top_k=5) -> List[Dict]:
+    pass
 
 @staticmethod
-def retrieve_relevant_chunk(subject, relation, vectorstore, retriever):
-    '''Fetch the most similar chunk to subject + relation name'''
+def retrieve_relevant_triples(query, reference_kg: List[Dict]) -> List[Dict]:
 
-    query = f"{subject} {relation}"
+    relevant_triples = []
+    for triple in reference_kg:
+        if query in triple['subject'] or query in triple['relation'] or query in triple['object']:
+            relevant_triples.append(triple)
+    return relevant_triples
 
+
+@staticmethod
+def retrieve_relevant_chunks(query, vectorstore, retriever, num_chunks=10):
+    '''Fetch the most similar chunk to the given query'''
+    relevant_chunks = []
     sub_docs = vectorstore.similarity_search(query)
 
     # if there is a parent doc chunk, use that, 
     #otherwise use the sub doc chunk
     parent_chunk = retriever.get_relevant_documents(query)
-    if len(parent_chunk) > 0:
-        relevant_chunk = parent_chunk[0].page_content
-    else:
-        relevant_chunk = sub_docs[0].page_content
-    return relevant_chunk
+    # if len(parent_chunk) > 0:
+    #     relevant_chunk = parent_chunk[0].page_content
+    # else:
+    #     relevant_chunk = sub_docs[0].page_content
+    for i, chunk in enumerate(sub_docs):
+        if i < num_chunks:
+            relevant_chunks.append(chunk.page_content)
+    return relevant_chunks

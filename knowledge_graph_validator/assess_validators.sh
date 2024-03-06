@@ -6,7 +6,7 @@ datasets=("FB13" "FB15K-237-N" "CoDeX-S" "Wiki27K" "YAGO3-10")
 
 # Fixed parameters can just be set once
 model="gpt-3.5-turbo-0125"
-context_types=('WorldKnowledgeKGValidator' 'WikidataKGValidator' 'WebKGValidator' 'WikidataWebKGValidator' 'WikipediaKGValidator')
+context_types=('WorldKnowledgeKGValidator' 'WikidataKGValidator' 'WebKGValidator' 'WikidataWebKGValidator' 'WikipediaWikidataKGValidator')
 seed=41
 num_examples=150
 

@@ -45,7 +45,7 @@ def sample_triples(triples, num_examples, random_seed=None):
 @click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
 @click.option('--model', required=True, type=click.Choice(['gpt-4-1106-preview', 'gpt-3.5-turbo-0125'], case_sensitive=False), help='The model to use as validator.')
 @click.option('--context-type', required=True, type=click.Choice(
-    ['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'TextContextKGValidator', 'WikidataKGValidator', 'WebKGValidator', 'WikidataWebKGValidator', 'WikipediaKGValidator'], 
+    ['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'TextContextKGValidator', 'WikidataKGValidator', 'WebKGValidator', 'WikidataWebKGValidator', 'WikipediaWikidataKGValidator'], 
     case_sensitive=False
     ), help='Model name')
 def main(dataset, num_examples, random_seed, model, context_type):
@@ -57,7 +57,7 @@ def main(dataset, num_examples, random_seed, model, context_type):
                     --num-examples 50 \
                     --random-seed 23 \
                     --model gpt-3.5-turbo-0125 \
-                    --context-type WikipediaKGValidator \
+                    --context-type WikipediaWikidataKGValidator \
         
     """
     os.environ['VALIDATION_MODEL'] = model
@@ -70,7 +70,7 @@ def main(dataset, num_examples, random_seed, model, context_type):
         'WikidataWebKGValidator': validators.WikidataWebKGValidator,
         'ReferenceKGValidator': validators.ReferenceKGValidator,
         'TextContextKGValidator': validators.TextContextKGValidator,
-        'WikipediaKGValidator': validators.WikipediaKGValidator,
+        'WikipediaWikidataKGValidator': validators.WikipediaWikidataKGValidator,
         'WikidataKGValidator': validators.WikidataKGValidator,
         'WebKGValidator': validators.WebKGValidator,
     }
@@ -92,6 +92,7 @@ def main(dataset, num_examples, random_seed, model, context_type):
     if context_type in ['TextContextKGValidator']:
         pass
 
+    logger.info(f"Validation class --> {context_type}")
 
     logger.info("Evaluating on positive samples")
     pos_results = []

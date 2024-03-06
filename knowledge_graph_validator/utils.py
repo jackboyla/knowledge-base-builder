@@ -122,6 +122,18 @@ def translate_triples(triples, entity_mapping, relation_mapping):
         )
     return translated_triples
 
+def preprocess_complex_relations(input_str: str) -> str:
+    # Define a mapping of complex relations to placeholders
+    complex_relations = {
+        "languages spoken, written, or signed": "languages spoken written or signed",
+    }
+    # Replace complex relations with placeholders
+    for cr, placeholder in complex_relations.items():
+        if cr in input_str:
+            input_str = input_str.replace(cr, placeholder)
+            logger.info(f"Replacing {cr} with {placeholder}")
+    return input_str
+
 
 def parse_triple(input_str: str, dataset_name:str) -> Dict[str, str]:
     """
@@ -130,6 +142,9 @@ def parse_triple(input_str: str, dataset_name:str) -> Dict[str, str]:
     Parses the input string to extract the triple components, handling cases where
     entities contain commas.
     """
+    # Preprocessing the relation to handle cases where it is a complex relation
+    input_str = preprocess_complex_relations(input_str)
+
     # Pattern to identify the relation - assumes it will be in between two commas and have NO COMMAS within it.
     relation_pattern = r", ([a-z_ ]+), "
 
@@ -146,8 +161,10 @@ def parse_triple(input_str: str, dataset_name:str) -> Dict[str, str]:
     # Cleaning up the head and tail
     head = head.strip(" (\n")
     tail = tail.strip(" )\n")
-    if dataset_name == 'FB15K-237N':
-        relation = relation.split(" ")
+    # if dataset_name == 'FB15K-237N':
+    #     relation = relation.split(" ")
+    if type(relation) != list:
+        relation = [relation]
 
 
     return {"subject": head, "relation": relation, "object": tail}

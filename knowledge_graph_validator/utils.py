@@ -201,6 +201,7 @@ def read_dataset(
         "FB13", 
         "WN11", 
         "WN18RR", 
+        "Wiki27K",
         "YAGO3-10", 
         "FB15K-237-N", 
         "CoDeX-S",
@@ -246,8 +247,6 @@ def read_dataset(
             for item in data:
                 input_triple = item["input"].split('\n')[2]
                 output = item["output"]
-
-                # import ipdb;ipdb.set_trace()
 
                 try:
                     triple = parse_triple(input_triple, dataset_name)
@@ -331,6 +330,41 @@ def read_dataset(
                         
         positive_triples = translate_triples(positive_triples, ent_mapping)
         negative_triples = translate_triples(negative_triples, ent_mapping)
+
+
+    elif dataset_name in ["Wiki27K"]:
+
+        def process_wiki27k_file(file) -> List[Dict]:
+            triples = []
+            for line in file:
+                parts = line.strip().split("\t")  # Splitting each line by tab
+                assert len(parts) == 3
+                subject, relation, object_ = parts
+                triple = {
+                    "subject": subject,
+                    "relation": relation,
+                    "object": object_,
+                }
+                triples.append(triple)
+            return triples
+
+
+        entity_mapping_path = f"../data/{dataset_name}/entity2label.txt"
+        ent_mapping = load_mapping(entity_mapping_path, dataset_name)
+        with open(f"../data/{dataset_name}/relation2label.json", 'r') as f:
+            rel_mapping = json.load(f)
+
+        with open(f"../data/{dataset_name}/o_test_pos.txt", "r") as file:
+
+            positive_triples = process_wiki27k_file(file)
+
+        with open(f"../data/{dataset_name}/o_test_neg.txt", "r") as file:
+
+            negative_triples = process_wiki27k_file(file)
+
+                        
+        positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
+        negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
     
 
 

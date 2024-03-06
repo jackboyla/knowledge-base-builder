@@ -21,7 +21,6 @@ import utils
 logger = utils.create_logger(__name__)
 
 client = instructor.patch(OpenAI(api_key=os.environ['OPENAI_API_KEY']))
-# MODEL = "gpt-3.5-turbo-0125"
 MODEL = os.environ['VALIDATION_MODEL']
 logger.info(f"Using Validator model {MODEL}")
 
@@ -227,7 +226,11 @@ class WikidataKGValidator(BaseModel):
 
         q = entity_label
         q = " ".join(q.split('_'))
-        return wikidata_wrapper.run(q)  # a string of the wikidata page
+        try:
+            return wikidata_wrapper.run(q)  # a string of the wikidata page
+        except Exception as e:
+            logger.error(f"Could not get wikidata page for {q} due to {e}")
+            return ""
 
     
     @staticmethod

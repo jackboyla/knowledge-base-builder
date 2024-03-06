@@ -5,7 +5,6 @@ from typing import List, Dict, Union, Any, Optional, Literal
 import sys
 sys.path.insert(0, '../../knowledge_graph_validator')
 import utils
-import validators
 import os
 
 logger = utils.create_logger(__name__)
@@ -45,21 +44,25 @@ def sample_triples(triples, num_examples, random_seed=None):
 @click.option('--num-examples', default=10, type=int, help='Number of examples to evaluate')
 @click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
 @click.option('--reference-context', required=False, type=click.Path(), help='The path to a custom reference context if the `RefKG` or `RefDocs` validator is chosen.')
+@click.option('--model', required=True, type=click.Choice(['gpt-4-1106-preview', 'gpt-3.5-turbo-0125'], case_sensitive=False), help='The model to use as validator.')
 @click.option('--context-type', required=True, type=click.Choice(
     ['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'ReferenceDocumentKGValidator', 'WikidataKGValidator', 'WebKGValidator', 'WikidataWebKGValidator'], 
     case_sensitive=False
     ), help='Model name')
-def main(dataset, num_examples, random_seed, reference_context, context_type):
+def main(dataset, num_examples, random_seed, reference_context, model, context_type):
     """Evaluate a model on a dataset.
 
     usage:
-            python assess_validator.py \
-                --dataset UMLS \
-                --num-examples 100 \
-                --random-seed 42 \
-                --context-type WebKGValidator
-    
+                python assess_validator.py \
+                    --dataset CoDeX-S \
+                    --num-examples 100 \
+                    --random-seed 12 \
+                    --model gpt-3.5-turbo-0125 \
+                    --context-type WikidataWebKGValidator
+        
     """
+    os.environ['VALIDATION_MODEL'] = model
+    import validators
 
     if context_type in ['ReferenceKGValidator', 'ReferenceDocumentKGValidator']:
         assert reference_context is not None, "You must provide a path to a reference context if you choose a reference context validator."
@@ -90,7 +93,7 @@ def main(dataset, num_examples, random_seed, reference_context, context_type):
     results_json = [r.model_dump() for r in neg_results] + [r.model_dump() for r in pos_results]
     save_dir = Path('../data/results') / f"{dataset}" / f"{context_type}"
     os.makedirs(save_dir, exist_ok=True)
-    save_path = save_dir / f"{num_examples}_{context_type}_{dataset}_seed{random_seed}.jsonl"
+    save_path = save_dir / f"{num_examples}_{context_type}_{dataset}_seed{random_seed}_{model}.jsonl"
     utils.save_jsonl(results_json, str(save_path))
     
     metrics = compute_metrics(pos_results, neg_results)

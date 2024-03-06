@@ -17,9 +17,36 @@ from wikidata_search import WikidataSearch, get_all_properties_with_labels
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
 
 import validator_utils
+import utils
+logger = utils.create_logger(__name__)
 
 client = instructor.patch(OpenAI(api_key=os.environ['OPENAI_API_KEY']))
-MODEL = "gpt-3.5-turbo-0125"
+# MODEL = "gpt-3.5-turbo-0125"
+MODEL = os.environ['VALIDATION_MODEL']
+logger.info(f"Using Validator model {MODEL}")
+
+
+def validate_reasoning(values):
+    chain_of_thought = values["chain_of_thought"]
+    answer = values["answer"]
+    resp = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a validator. Determine if the value is valid for the statement. If it is not, explain why.",
+            },
+            {
+                "role": "user",
+                "content": f"Verify that `{answer}` follows the chain of thought: {chain_of_thought}",
+            },
+        ],
+        # this comes from client = instructor.patch(OpenAI())
+        response_model=Validation,
+    )
+    if not resp.is_valid:
+        raise ValueError(resp.error_message)
+    return values
 
 
 class ValidatedTriple(BaseModel, extra='allow'):
@@ -29,11 +56,26 @@ class ValidatedTriple(BaseModel, extra='allow'):
 
     triple_is_valid: Literal[True, False, "Not enough information to say"] = Field(
       ...,
-        description="Whether the predicted subject-relation-object triple is generally valid, according to the previously stated rules.",
+        description="Whether the predicted subject-relation-object triple is generally valid, according to the previously stated rules. " +
+                    "If multiple relations are provided, the triple is valid if any of them is valid. " +
+                    "Think through the context and the nuances of the terms before providing your answer. " +
+                    "If the context does not provide enough information, try to use your common sense."
     )
     reason: str = Field(
         None, description="The reason why the predicted subject-relation-object triple is or is not valid."
     )
+
+    # @model_validator(mode='after')
+    # def assert_correct_validation(self, info: ValidationInfo):
+    #     if len(self.validated_triples) != len(self.triples):
+    #         raise ValueError(
+    #             "Number of properties validated does not match number of properties in the prediction knowledge base. " +
+    #             f"Number of properties validated: {len(self.validated_triples)}, " +
+    #             f"Number of properties in the text: {len(self.triples)}"
+    #             )
+    #     return self
+    
+
 
 
 @staticmethod
@@ -49,20 +91,21 @@ def validate_statement_with_context(entity_label, predicted_property_name, predi
         messages=[
             {
                 "role": "user",
-                "content": f"Using your knowledge of the world and the given context as a reference, " +
-                        "evaluate the predicted triple for its accuracy by considering: " +
-                        "1. Definitions and relevance of key terms, " +
-                        "2. Historical and factual validity, " +
-                        "3. Synonyms or related terms appropriateness (i.e, is the prediction 'close enough'), " +
-                        "4. Nuances and implications of the terms. " +
-                        "5. Any facts you can glean from the context. " +
-                        "Acknowledge a range of correct answers where appropriate. " +
-                        "If multiple relations are provided please consider them all individually." +
-                        f"\nSubject Name: {entity_label}" +
-                        f"\nPredicted Relation: {predicted_property_name}" +
-                        f"\nPredicted Object Name: {predicted_property_value}" +
-                        f"\n\nContext: {context}" +
-                        "Use this approach to recognize a range of correct answers when nuances and context allow for it."
+                "content": f"Using your knowledge of the world and the given context as a reference, " + 
+                            "evaluate the predicted triple for its accuracy by considering: " + 
+                            "1. Definitions, relevance, and any cultural or domain-specific nuances of key terms, " + 
+                            "2. Historical and factual validity, including any recent updates or debates around the information, " + 
+                            "3. The appropriateness of synonyms or related terms, and whether they enrich or detract from the triple's accuracy, " + 
+                            "4. The implications and nuanced meanings of the terms within the given context, " + 
+                            "5. The contextual relevance and how well the triple integrates with the provided context. " + 
+                            "Acknowledge a range of correct answers where appropriate, especially when nuances and context allow for multiple interpretations. Evaluate the strength and appropriateness of each relation if multiple are suggested. " +
+                            "Approach this with a mindset that allows for exploratory analysis and the recognition of uncertainty or multiple valid perspectives. " +
+                            f"\nSubject Name: {entity_label}" + 
+                            f"\nPredicted Relation: {predicted_property_name}" + 
+                            f"\nPredicted Object Name: {predicted_property_value}" + 
+                            f"\n\nContext: {context}" + 
+                            "Use this approach to recognize a range of correct answers when nuances and context allow for it." +
+                            "If the context does not provide enough information, try to use your common sense."
             }
         ],
         max_retries=3,

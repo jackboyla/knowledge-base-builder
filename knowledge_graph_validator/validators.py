@@ -3,14 +3,9 @@ from pydantic import BaseModel, model_validator, field_validator, Field, Validat
 from typing import List, Dict, Union, Any, Optional, Literal
 import instructor
 from openai import OpenAI
-from langchain.retrievers import ParentDocumentRetriever
-from langchain.storage import InMemoryStore
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import TextLoader
-from langchain_community.vectorstores import Chroma
 from langchain_core.documents.base import Document
-from langchain_openai import OpenAIEmbeddings
 import os
+import time
 from duckduckgo_search import DDGS
 from tqdm import tqdm
 from wikidata_search import WikidataSearch, get_all_properties_with_labels
@@ -159,9 +154,23 @@ class WebKGValidator(BaseModel):
 
 
     @staticmethod
-    def get_web_search_results(search_tool, query):
-        hits = search_tool.text(query, max_results=5)
-        return [h for h in hits]
+    def get_web_search_results(search_tool, query, max_retries=6, sleep_interval=10):
+        '''Attempt to fetch web search results with retry logic.'''
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Attempt to perform the search
+                hits = search_tool.text(query, max_results=5)
+                return [h for h in hits]
+            except Exception as e:
+                # Print or log the error and retry after waiting
+                logger.info(f"Attempt {attempt} failed with error: {e}")
+                if attempt < max_retries:
+                    print("Retrying...")
+                    time.sleep(sleep_interval)
+                else:
+                    # All attempts failed; re-raise the last exception
+                    logger.error(f"Failed to get web search results for {query} after {max_retries} attempts")
+                    return [""]
 
 
     @staticmethod

@@ -2,14 +2,52 @@ import requests
 import copy
 import json
 import urllib
+import time
+import utils
 
 from wikidata.client import Client
 
+logger = utils.create_logger(__name__)
 
 # TODO: can be improved to filter uninteresting properties like https://github.com/langchain-ai/langchain/blob/8af4425abd3cbe890a365cec6eac9c0ba69ee282/libs/community/langchain_community/utilities/wikidata.py#L92
 
 
-def fetch_wikipedia_page_content(wikidata_id):
+def get_wikidata_qids(search_string):
+    """
+    Fetches possible Wikidata QIDs for a given search string.
+
+    Parameters:
+    - search_string (str): The string to search for in Wikidata.
+
+    Returns:
+    - List of dictionaries with 'label', 'description', and 'id' for each match.
+    """
+    url = "https://www.wikidata.org/w/api.php"
+    params = {
+        "action": "wbsearchentities",
+        "format": "json",
+        "language": "en",
+        "type": "item",
+        "search": search_string
+    }
+    response = requests.get(url, params=params)
+    
+    qids = []
+    if response.ok:
+        search_results = response.json().get("search", [])
+        for result in search_results:
+            qids.append({
+                "label": result.get("label", "No label"),
+                "description": result.get("description", "No description"),
+                "id": result["id"]
+            })
+    else:
+        print("Failed to fetch data from Wikidata.")
+    
+    return qids
+
+
+def fetch_wikipedia_page_content(wikidata_id, max_retries=6, sleep_interval=10):
     """
     Fetch the entire content of a Wikipedia page for a given Wikidata ID.
 
@@ -27,28 +65,41 @@ def fetch_wikipedia_page_content(wikidata_id):
         'sitefilter': 'enwiki',
         'format': 'json'
     }
-    response_wikidata = requests.get("https://www.wikidata.org/w/api.php", params=params_wikidata)
-    response_json_wikidata = response_wikidata.json()
-    sitelinks = response_json_wikidata['entities'][wikidata_id].get('sitelinks', {})
-    enwiki_title = sitelinks.get('enwiki', {}).get('title', '')
-    
-    if not enwiki_title:
-        return "Wikipedia page title not found for the given Wikidata ID."
-    
-    # Fetch the content of the Wikipedia page using the title
-    params_wikipedia = {
-        'action': 'query',
-        'format': 'json',
-        'titles': enwiki_title,
-        'prop': 'extracts',
-        'explaintext': True,  # Return plain text content for the entire page
-    }
-    response_wikipedia = requests.get("https://en.wikipedia.org/w/api.php", params=params_wikipedia)
-    response_json_wikipedia = response_wikipedia.json()
-    page = next(iter(response_json_wikipedia['query']['pages'].values()))
-    content = page.get('extract', '')
-    
-    return content
+    for attempt in range(1, max_retries + 1):
+        try:
+            response_wikidata = requests.get("https://www.wikidata.org/w/api.php", params=params_wikidata)
+            response_json_wikidata = response_wikidata.json()
+            sitelinks = response_json_wikidata['entities'][wikidata_id].get('sitelinks', {})
+            enwiki_title = sitelinks.get('enwiki', {}).get('title', '')
+            
+            if not enwiki_title:
+                return "Wikipedia page title not found for the given Wikidata ID."
+            
+            # Fetch the content of the Wikipedia page using the title
+            params_wikipedia = {
+                'action': 'query',
+                'format': 'json',
+                'titles': enwiki_title,
+                'prop': 'extracts',
+                'explaintext': True,  # Return plain text content for the entire page
+            }
+            response_wikipedia = requests.get("https://en.wikipedia.org/w/api.php", params=params_wikipedia)
+            response_json_wikipedia = response_wikipedia.json()
+            page = next(iter(response_json_wikipedia['query']['pages'].values()))
+            content = page.get('extract', '')
+
+            return content
+
+        except Exception as e:
+            # Print or log the error and retry after waiting
+            logger.info(f"Attempt {attempt} failed with error: {e}")
+            if attempt < max_retries:
+                print("Retrying...")
+                time.sleep(sleep_interval)
+            else:
+                # All attempts failed; re-raise the last exception
+                logger.error(f"Failed to get web search results for {wikidata_id} after {max_retries} attempts")
+                return [""]
 
 
 def fetch_labels(entity_ids):

@@ -123,7 +123,7 @@ def translate_triples(triples, entity_mapping, relation_mapping):
     return translated_triples
 
 
-def parse_triple(input_str: str) -> Dict[str, str]:
+def parse_triple(input_str: str, dataset_name:str) -> Dict[str, str]:
     """
     USED for FB15K-237N, and CODEX-S, where the triple is given as a string
             e.g "\nThe input triple: \n( Artie Lange, influence influence node influenced by, Jackie Gleason )\n"
@@ -146,7 +146,9 @@ def parse_triple(input_str: str) -> Dict[str, str]:
     # Cleaning up the head and tail
     head = head.strip(" (\n")
     tail = tail.strip(" )\n")
-    relation = relation.split(" ")
+    if dataset_name == 'FB15K-237N':
+        relation = relation.split(" ")
+
 
     return {"subject": head, "relation": relation, "object": tail}
 
@@ -232,7 +234,7 @@ def read_dataset(
                 # import ipdb;ipdb.set_trace()
 
                 try:
-                    triple = parse_triple(input_triple)
+                    triple = parse_triple(input_triple, dataset_name)
 
                     if output == "True":
                         positive_triples.append(triple)

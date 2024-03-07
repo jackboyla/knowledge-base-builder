@@ -130,7 +130,7 @@ def preprocess_complex_relations(input_str: str) -> str:
     for cr, placeholder in complex_relations.items():
         if cr in input_str:
             input_str = input_str.replace(cr, placeholder)
-            logger.info(f"Replacing {cr} with {placeholder}")
+            # logger.info(f"Replacing {cr} with {placeholder}")
     return input_str
 
 

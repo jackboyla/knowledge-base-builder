@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# bash assess_validators.sh | tee logs/run_$(date "+%Y-%m-%d_%H-%M-%S").log
+
 # Define arrays for each parameter if they vary between experiments
 # For this example, let's vary the datasets and random seeds
 datasets=("FB13" "FB15K-237-N" "CoDeX-S" "Wiki27K" "YAGO3-10")
@@ -11,8 +13,8 @@ seed=41
 num_examples=150
 
 # Loop through all combinations of datasets and seeds
-for context_type in "${context_types[@]}"; do
-    for dataset in "${datasets[@]}"; do
+for dataset in "${datasets[@]}"; do
+    for context_type in "${context_types[@]}"; do
         echo "Running experiment with dataset ${dataset} and seed ${seed}"
         python assess_validator.py \
             --dataset "$dataset" \

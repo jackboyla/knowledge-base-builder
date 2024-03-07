@@ -6,7 +6,7 @@ from openai import OpenAI
 from langchain_core.documents.base import Document
 import os
 import time
-from duckduckgo_search import DDGS
+import duckduckgo_verbose_search
 from tqdm import tqdm
 from wikidata_search import WikidataSearch, get_all_properties_with_labels
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
@@ -147,7 +147,7 @@ class WebKGValidator(BaseModel):
 
         self['validated_triples'] = []
 
-        search_tool = DDGS()
+        search_tool = duckduckgo_verbose_search.DuckDuckGoVerboseSearch(max_search_results=5)
 
         for triple in tqdm(self['triples']):
 
@@ -155,16 +155,27 @@ class WebKGValidator(BaseModel):
 
             search_query = WebKGValidator.create_query(subject, relation, object)
 
-            web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
+            # web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
+
+            web_results: List[Dict] = search_tool(search_query)
+            web_reference = [Document(f"{result['title']} {result['body']}") for result in web_results]
+            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(web_reference)
+
+            relevant_chunks = validator_utils.retrieve_relevant_chunks(
+                query=f"{triple['subject']} {triple['relation']} {triple['object']}", 
+                vectorstore=vectorstore,
+                retriever=retriever,
+            )
+            reference_context = {'relevant_text': relevant_chunks}
 
             # EVALUATE ONE PROPERTY
             resp = validate_statement_with_context(
                 entity_label=subject, 
                 predicted_property_name=relation, 
                 predicted_property_value=object, 
-                context=web_reference
+                context=reference_context
             )
-            resp.sources = [web_reference]
+            resp.sources = [reference_context]
             resp.candidate_triple = triple
 
             self['validated_triples'].append(resp)
@@ -305,7 +316,7 @@ class WikidataWebKGValidator(BaseModel):
 
         self['validated_triples'] = []
 
-        search_tool = DDGS()
+        search_tool = duckduckgo_verbose_search.DuckDuckGoVerboseSearch(max_search_results=5)
         wrapper = WikidataAPIWrapper()
         wrapper.top_k_results = 1
         wikidata_wrapper = WikidataQueryRun(api_wrapper=wrapper)
@@ -314,18 +325,30 @@ class WikidataWebKGValidator(BaseModel):
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
-            search_query = WebKGValidator.create_query(subject, relation, object)
-            web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
             wikidata_reference = WikidataKGValidator.get_wikidata(subject, wikidata_wrapper)
+            search_query = WebKGValidator.create_query(subject, relation, object)
+
+            # web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
+
+            web_results: List[Dict] = search_tool(search_query)
+            web_reference = [Document(f"{result['title']} {result['body']}") for result in web_results]
+            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(web_reference)
+
+            relevant_chunks = validator_utils.retrieve_relevant_chunks(
+                query=f"{triple['subject']} {triple['relation']} {triple['object']}", 
+                vectorstore=vectorstore,
+                retriever=retriever,
+            )
+            reference_context = {'web_reference': web_reference, 'wikidata_reference': wikidata_reference}
 
             # EVALUATE ONE PROPERTY
             resp = validate_statement_with_context(
                 entity_label=subject, 
                 predicted_property_name=relation, 
                 predicted_property_value=object, 
-                context={'web_reference': web_reference, 'wikidata_reference': wikidata_reference}
+                context=reference_context
             )
-            resp.sources = {'web_reference': web_reference, 'wikidata_reference': wikidata_reference}
+            resp.sources = reference_context
             resp.candidate_triple = triple
 
             self['validated_triples'].append(resp)

@@ -72,7 +72,7 @@ class DuckDuckGoVerboseSearch:
                     return response.content
                 else:
                     logger.error(f"Attempt {attempt}: Error fetching {url}: {response.status_code}")
-            except requests.RequestException as exception:
+            except Exception as exception:
                 logger.error(f"Attempt {attempt}: Error fetching {url}: {exception}")
             
             if attempt < self.max_retries:

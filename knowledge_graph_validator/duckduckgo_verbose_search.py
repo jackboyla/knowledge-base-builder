@@ -41,7 +41,10 @@ def simplify_html(html):
 def extract_title(html):
     """Extract the title from an HTML document."""
     soup = BeautifulSoup(html, 'html.parser')
-    return soup.title.string
+    try:
+        return soup.title.string
+    except:
+        return None
 
 class DuckDuckGoVerboseSearch:
     def __init__(self, verbose=False, max_search_results=5):

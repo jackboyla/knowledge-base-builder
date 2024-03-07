@@ -28,7 +28,7 @@ def create_parent_document_retriever(docs: List[Document]):
     # https://python.langchain.com/docs/modules/data_connection/retrievers/parent_document_retriever
 
     # This text splitter is used to create the child documents
-    child_splitter = RecursiveCharacterTextSplitter(chunk_size=400)
+    child_splitter = RecursiveCharacterTextSplitter(chunk_size=1000)
     # The vectorstore to use to index the child chunks
     vectorstore = Chroma(
         collection_name="full_documents", embedding_function=OpenAIEmbeddings()
@@ -41,7 +41,7 @@ def create_parent_document_retriever(docs: List[Document]):
         child_splitter=child_splitter,
         # parent_splitter=parent_splitter,
     )
-    retriever.add_documents(docs, ids=None) # add entity doc(s)
+    retriever.add_documents(docs, ids=None)
 
     # list(store.yield_keys())   # see how many chunks it's created
 
@@ -81,7 +81,7 @@ def retrieve_relevant_chunks(query, vectorstore, retriever, num_chunks=10):
 
     # if there is a parent doc chunk, use that, 
     #otherwise use the sub doc chunk
-    parent_chunk = retriever.get_relevant_documents(query)
+    # parent_chunk = retriever.get_relevant_documents(query)
     # if len(parent_chunk) > 0:
     #     relevant_chunk = parent_chunk[0].page_content
     # else:

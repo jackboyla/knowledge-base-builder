@@ -18,7 +18,7 @@ import utils
 
 logger = utils.create_logger(__name__)
 
-LRU_CACHE_MAXSIZE = 128
+LRU_CACHE_MAXSIZE = 32
 
 
 def simplify_html(html):
@@ -71,9 +71,9 @@ class DuckDuckGoVerboseSearch:
                     response.encoding = 'utf-8'
                     return response.content
                 else:
-                    logger.error(f"Attempt {attempt}: Error fetching {url}: {response.status_code}")
+                    logger.warning(f"Attempt {attempt}: Error fetching {url}: {response.status_code}")
             except Exception as exception:
-                logger.error(f"Attempt {attempt}: Error fetching {url}: {exception}")
+                logger.warning(f"Attempt {attempt}: Error fetching {url}: {exception}")
             
             if attempt < self.max_retries:
                 time.sleep(self.retry_delay)
@@ -84,12 +84,13 @@ class DuckDuckGoVerboseSearch:
         """Search DuckDuckGo for a topic, caching the result."""
         if self.verbose:
             logger.info("Search DDG for:", topic)
+        result = []
         for attempt in range(1, self.max_retries + 1):
             try:
                 result = DDGS().text(topic, max_results=self.max_search_results)
                 return result
             except Exception as exception: 
-                logger.error(f"Attempt {attempt}: Error searching DDG for {topic}: {exception}")
+                logger.warning(f"Attempt {attempt}: Error searching DDG for {topic}: {exception}")
 
             if attempt < self.max_retries:
                 time.sleep(self.retry_delay)

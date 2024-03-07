@@ -3,6 +3,7 @@
 """Simplified from https://github.com/rtwfroody/gpt-search/blob/master/gpt_search.py"""
 
 import datetime
+import time
 import json
 import re
 import sys
@@ -13,6 +14,9 @@ from duckduckgo_search import DDGS
 from markdownify import MarkdownConverter
 import requests
 from functools import lru_cache
+import utils
+
+logger = utils.create_logger(__name__)
 
 LRU_CACHE_MAXSIZE = 128
 
@@ -47,33 +51,48 @@ def extract_title(html):
         return None
 
 class DuckDuckGoVerboseSearch:
-    def __init__(self, verbose=False, max_search_results=5):
+    def __init__(self, verbose=False, max_search_results=5, max_retries=2, retry_delay=2):
         self.verbose = verbose
         self.max_search_results = max_search_results
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+
 
     @lru_cache(maxsize=LRU_CACHE_MAXSIZE)
     def fetch(self, url):
         """Fetch a URL, caching the result."""
         if self.verbose:
-            print("Fetching", url)
-        try:
-            # Fetch the URL
-            response = requests.get(url, timeout=10)
-            # Check if the request was successful
-            if response.status_code != 200:
-                print(f"Error fetching {url}: {response.status_code}")
-                return None
-            return response.content
-        except requests.RequestException as exception:
-            print(f"Error fetching {url}: {exception}")
-            return None
+            logger.info("Fetching", url)
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                response = requests.get(url, headers=self.headers, timeout=10)
+                if response.status_code == 200:
+                    response.encoding = 'utf-8'
+                    return response.content
+                else:
+                    logger.error(f"Attempt {attempt}: Error fetching {url}: {response.status_code}")
+            except requests.RequestException as exception:
+                logger.error(f"Attempt {attempt}: Error fetching {url}: {exception}")
+            
+            if attempt < self.max_retries:
+                time.sleep(self.retry_delay)
+        return None
 
     @lru_cache(maxsize=LRU_CACHE_MAXSIZE)
     def ddg_search(self, topic):
         """Search DuckDuckGo for a topic, caching the result."""
         if self.verbose:
-            print("Search DDG for:", topic)
-        result = DDGS().text(topic, max_results=self.max_search_results)  # a generator of dict['title', 'href', 'body']
+            logger.info("Search DDG for:", topic)
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                result = DDGS().text(topic, max_results=self.max_search_results)
+                return result
+            except Exception as exception: 
+                logger.error(f"Attempt {attempt}: Error searching DDG for {topic}: {exception}")
+
+            if attempt < self.max_retries:
+                time.sleep(self.retry_delay)
         return result
 
     def ddg_top_hits(self, topic, skip=()):
@@ -88,7 +107,7 @@ class DuckDuckGoVerboseSearch:
             if href in skip:
                 continue
             if self.verbose:
-                print("  Fetching", href)
+                logger.info("  Fetching", href)
             html = self.fetch(href)
             if html:
                 extracted_title = extract_title(html)

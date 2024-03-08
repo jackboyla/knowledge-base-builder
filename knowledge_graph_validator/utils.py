@@ -111,14 +111,16 @@ def translate_triples(triples, entity_mapping=None, relation_mapping=None):
     """Translate entity and relation IDs in triples to their text representation."""
     translated_triples = []
     for triple in triples:
-        translated_triples.append(
-            {
-                "subject": entity_mapping.get(triple["subject"]) if entity_mapping else triple["subject"],
+        translated_triple  = {
+                "subject": entity_mapping.get(triple["subject"], triple["subject"]) if entity_mapping else triple["subject"],
                 "relation": relation_mapping.get(
                     triple["relation"]) if relation_mapping else triple["relation"],
-                "object": entity_mapping.get(triple["object"]) if entity_mapping else triple["subject"],
-            }
-        )
+                "object": entity_mapping.get(triple["object"], triple['object']) if entity_mapping else triple["subject"],
+        }
+        if translated_triple["relation"] is None:
+            translated_triple["relation"] = triple["relation"]
+            logger.info(f"No mapping found for relation: {triple['relation']}")
+        translated_triples.append(translated_triple)
     return translated_triples
 
 def preprocess_complex_relations(input_str: str) -> str:
@@ -272,7 +274,10 @@ def read_dataset(
         else:
             entity_mapping_path = f"../data/{dataset_name}/entity2text.txt"
         ent_mapping = load_mapping(entity_mapping_path, dataset_name)
-        rel_mapping = load_mapping(f"../data/{dataset_name}/relation2text.txt")
+        if dataset_name in ["WN18RR", "YAGO3-10"]:
+            rel_mapping = load_mapping(f"../data/{dataset_name}/relation2text.txt")
+        elif dataset_name in ["UMLS"]:
+            rel_mapping = json.load(open(f"../data/{dataset_name}/umls_relation_dict.json"))
 
         data_file_path = f"../data/{dataset_name}/test.tsv"
 
@@ -304,9 +309,6 @@ def read_dataset(
                 parts = line.strip().split("\t")  # Splitting each line by tab
                 assert len(parts) == 3
                 subject, relation, object_ = parts
-                # relation = relation.replace('.', '')
-                # relation = relation.replace('_', '')
-                # relation = relation.split('/')[1:]   #  [1:] because relation starts with `/` e.g  /people/person/nationality
                 triple = {
                     "subject": subject,
                     "relation": relation,
@@ -319,9 +321,6 @@ def read_dataset(
         entity_mapping_path = f"../data/{dataset_name}/entity2label.txt"
         ent_mapping = load_mapping(entity_mapping_path, dataset_name)
         relation_mapping = json.loads(open('../data/FB15K-237-N/relation2template.json', 'r').read())
-        for key in relation_mapping.keys():
-            relation_mapping[key] = relation_mapping[key].replace('[X]', '[subject]')
-            relation_mapping[key] = relation_mapping[key].replace('[Y]', '[object]')
 
         with open(f"../data/{dataset_name}/o_test_pos.txt", "r") as file:
 
@@ -334,6 +333,13 @@ def read_dataset(
                         
         positive_triples = translate_triples(positive_triples, ent_mapping, relation_mapping)
         negative_triples = translate_triples(negative_triples, ent_mapping, relation_mapping)
+
+        for triple in positive_triples:
+            triple['relation'] = triple['relation'].replace('[X]', triple['subject'])
+            triple['relation'] = triple['relation'].replace('[Y]', triple['object'])
+        for triple in negative_triples:
+            triple['relation'] = triple['relation'].replace('[X]', triple['subject'])
+            triple['relation'] = triple['relation'].replace('[Y]', triple['object'])
 
 
     elif dataset_name in ["Wiki27K"]:
@@ -355,8 +361,7 @@ def read_dataset(
 
         entity_mapping_path = f"../data/{dataset_name}/entity2label.txt"
         ent_mapping = load_mapping(entity_mapping_path, dataset_name)
-        with open(f"../data/{dataset_name}/relation2label.json", 'r') as f:
-            rel_mapping = json.load(f)
+        relation_mapping = json.loads(open(f"../data/{dataset_name}/relation2template.json", 'r').read())
 
         with open(f"../data/{dataset_name}/o_test_pos.txt", "r") as file:
 
@@ -367,8 +372,15 @@ def read_dataset(
             negative_triples = process_wiki27k_file(file)
 
                         
-        positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
-        negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
+        positive_triples = translate_triples(positive_triples, ent_mapping, relation_mapping)
+        negative_triples = translate_triples(negative_triples, ent_mapping, relation_mapping)
+
+        for triple in positive_triples:
+            triple['relation'] = triple['relation'].replace('[X]', triple['subject'])
+            triple['relation'] = triple['relation'].replace('[Y]', triple['object'])
+        for triple in negative_triples:
+            triple['relation'] = triple['relation'].replace('[X]', triple['subject'])
+            triple['relation'] = triple['relation'].replace('[Y]', triple['object'])
     
 
 

@@ -6,7 +6,6 @@ import datetime
 import time
 import json
 import re
-import sys
 from typing import Union, List, Dict
 
 from bs4 import BeautifulSoup
@@ -15,6 +14,8 @@ from markdownify import MarkdownConverter
 import requests
 from functools import lru_cache
 import utils
+import sys   
+sys.setrecursionlimit(10000)
 
 logger = utils.create_logger(__name__)
 
@@ -63,15 +64,15 @@ class DuckDuckGoVerboseSearch:
     def fetch(self, url):
         """Fetch a URL, caching the result."""
         if self.verbose:
-            logger.info("Fetching", url)
+            logger.info(f"Fetching {url}")
         for attempt in range(1, self.max_retries + 1):
             try:
-                response = requests.get(url, headers=self.headers, timeout=10)
-                if response.status_code == 200:
-                    response.encoding = 'utf-8'
-                    return response.content
-                else:
-                    logger.warning(f"Attempt {attempt}: Error fetching {url}: {response.status_code}")
+                with requests.get(url, headers=self.headers, timeout=10) as response:
+                    if response.status_code == 200:
+                        response.encoding = 'utf-8'
+                        return response.content
+                    else:
+                        logger.warning(f"Attempt {attempt}: Error fetching {url}: {response.status_code}")
             except Exception as exception:
                 logger.warning(f"Attempt {attempt}: Error fetching {url}: {exception}")
             
@@ -83,40 +84,45 @@ class DuckDuckGoVerboseSearch:
     def ddg_search(self, topic):
         """Search DuckDuckGo for a topic, caching the result."""
         if self.verbose:
-            logger.info("Search DDG for:", topic)
+            logger.info(f"Search DDG for: {topic}")
         result = []
         for attempt in range(1, self.max_retries + 1):
             try:
-                result = DDGS().text(topic, max_results=self.max_search_results)
-                return result
+                with DDGS() as ddgs:
+                    result = ddgs.text(topic, max_results=self.max_search_results)
+                    if result:
+                        return [r for r in result]
             except Exception as exception: 
-                logger.warning(f"Attempt {attempt}: Error searching DDG for {topic}: {exception}")
+                logger.warning(f"Attempt : Error searching DDG for {topic}: {exception}")  # {attempt}
 
             if attempt < self.max_retries:
                 time.sleep(self.retry_delay)
         return result
 
-    def ddg_top_hits(self, topic, skip=()):
+    def ddg_top_hits(self, results, skip=()):
         """
             Search DuckDuckGo for a topic, and find the top hits. 
             Enter each html and return the parsed pages
         """
-        results = self.ddg_search(topic)
+        
         fleshed_out_results = []
         for result in results:
             title, href, body = result['title'], result['href'], result['body'] # defaults
             if href in skip:
                 continue
             if self.verbose:
-                logger.info("  Fetching", href)
+                logger.info(f"Fetching {href}")
             html = self.fetch(href)
-            if html:
-                extracted_title = extract_title(html)
-                if extracted_title:
-                    title = str(extracted_title)
-                content = simplify_html(html)
-                if content:
-                    body = content
+            try:
+                if html:
+                    extracted_title = extract_title(html)
+                    if extracted_title:
+                        title = str(extracted_title)
+                    content = simplify_html(html)
+                    if content:
+                        body = content
+            except Exception as e:
+                logger.warning(f"Error parsing result from link {href} due to {e}")
 
             fleshed_out_results.append({'title': title, 'href': href, 'body': body})
         return fleshed_out_results
@@ -125,7 +131,8 @@ class DuckDuckGoVerboseSearch:
 
     def __call__(self, query) -> List[Dict]:
 
-        verbose_results = self.ddg_top_hits(query,
+        results = self.ddg_search(query)
+        verbose_results = self.ddg_top_hits(results,
                                             # skip=[source for source, _ in sources]
                                             )
 

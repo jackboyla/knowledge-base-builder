@@ -1,5 +1,6 @@
 import click
 import numpy as np
+from tqdm import tqdm
 from pathlib import Path
 from typing import List, Dict, Union, Any, Optional, Literal
 import sys
@@ -15,12 +16,12 @@ def compute_metrics(pos_results, neg_results):
     fp = 0
     tn = 0
     fn = 0 
-    for val in pos_results[0].model_dump()['validated_triples']:
+    for val in pos_results['validated_triples']:
         if val['triple_is_valid']:    # property is correctly marked as valid
             tp += 1
         else:                           # property is incorrectly marked as invalid
             fn += 1
-    for val in neg_results[0].model_dump()['validated_triples']:
+    for val in neg_results['validated_triples']:
         if val['triple_is_valid']:    # property is incorrectly marked as valid
             fp += 1
         else:                           # property is correctly marked as invalid
@@ -54,10 +55,10 @@ def main(dataset, num_examples, random_seed, model, context_type):
     usage:
                 python assess_validator.py \
                     --dataset CoDeX-S \
-                    --num-examples 50 \
+                    --num-examples 4 \
                     --random-seed 23 \
                     --model gpt-3.5-turbo-0125 \
-                    --context-type WikipediaWikidataKGValidator \
+                    --context-type WebKGValidator \
         
     """
     os.environ['VALIDATION_MODEL'] = model
@@ -95,14 +96,27 @@ def main(dataset, num_examples, random_seed, model, context_type):
     logger.info(f"Validation class --> {context_type}")
 
     logger.info("Evaluating on positive samples")
-    pos_results = []
-    pos_results.append(v(**positive_samples))
+    pos_results = {'triples': [], 'validated_triples': []}
+    for p in tqdm(positive_samples['triples']):
+        try:
+            result = (v(**{'triples': [p]}))
+            pos_results['triples'].append(result.model_dump()['triples'][0])
+            pos_results['validated_triples'].append(result.model_dump()['validated_triples'][0])
+        except Exception as e:
+            logger.info(f"Error validating {p} due to {e}")
+
     logger.info("Evaluating on negative samples")
-    neg_results = []
-    neg_results.append(v(**negative_samples))
+    neg_results = {'triples': [], 'validated_triples': []}
+    for n in tqdm(negative_samples['triples']):
+        try:
+            result = (v(**{'triples': [n]}))
+            neg_results['triples'].append(result.model_dump()['triples'][0])
+            neg_results['validated_triples'].append(result.model_dump()['validated_triples'][0])
+        except Exception as e:
+            logger.info(f"Error validating {n} due to {e}")
 
     # saving
-    results_json = [r.model_dump() for r in neg_results] + [r.model_dump() for r in pos_results]
+    results_json = [{'negative_results': neg_results, 'positive_results': pos_results}]
     save_dir = Path('../data/results') / f"{dataset}" / f"{context_type}"
     os.makedirs(save_dir, exist_ok=True)
     save_path = save_dir / f"{num_examples}_{context_type}_{dataset}_seed{random_seed}_{model}.jsonl"

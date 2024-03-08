@@ -13,6 +13,7 @@ from duckduckgo_search import DDGS
 from markdownify import MarkdownConverter
 import requests
 from functools import lru_cache
+import chardet
 import utils
 import sys   
 sys.setrecursionlimit(10000)
@@ -69,7 +70,8 @@ class DuckDuckGoVerboseSearch:
             try:
                 with requests.get(url, headers=self.headers, timeout=10) as response:
                     if response.status_code == 200:
-                        response.encoding = 'utf-8'
+                        encoding = chardet.detect(response.content)['encoding']
+                        response.encoding = encoding
                         return response.content
                     else:
                         logger.warning(f"Attempt {attempt}: Error fetching {url}: {response.status_code}")

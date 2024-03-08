@@ -238,7 +238,7 @@ def read_dataset(
         positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
         negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
 
-    elif dataset_name in ["CoDeX-S"]:  # "FB15K-237N", 
+    elif dataset_name in ["CoDeX-S"]:
         data_file_path = f"../data/{dataset_name}/{dataset_name}-test.json"
 
         with open(data_file_path, "r") as file:
@@ -304,9 +304,9 @@ def read_dataset(
                 parts = line.strip().split("\t")  # Splitting each line by tab
                 assert len(parts) == 3
                 subject, relation, object_ = parts
-                relation = relation.replace('.', '')
-                relation = relation.replace('_', '')
-                relation = relation.split('/')[1:]   #  [1:] because relation starts with `/` e.g  /people/person/nationality
+                # relation = relation.replace('.', '')
+                # relation = relation.replace('_', '')
+                # relation = relation.split('/')[1:]   #  [1:] because relation starts with `/` e.g  /people/person/nationality
                 triple = {
                     "subject": subject,
                     "relation": relation,
@@ -318,6 +318,10 @@ def read_dataset(
 
         entity_mapping_path = f"../data/{dataset_name}/entity2label.txt"
         ent_mapping = load_mapping(entity_mapping_path, dataset_name)
+        relation_mapping = json.loads(open('../data/FB15K-237-N/relation2template.json', 'r').read())
+        for key in relation_mapping.keys():
+            relation_mapping[key] = relation_mapping[key].replace('[X]', '[subject]')
+            relation_mapping[key] = relation_mapping[key].replace('[Y]', '[object]')
 
         with open(f"../data/{dataset_name}/o_test_pos.txt", "r") as file:
 
@@ -328,8 +332,8 @@ def read_dataset(
             negative_triples = process_fb15k_file(file)
 
                         
-        positive_triples = translate_triples(positive_triples, ent_mapping)
-        negative_triples = translate_triples(negative_triples, ent_mapping)
+        positive_triples = translate_triples(positive_triples, ent_mapping, relation_mapping)
+        negative_triples = translate_triples(negative_triples, ent_mapping, relation_mapping)
 
 
     elif dataset_name in ["Wiki27K"]:

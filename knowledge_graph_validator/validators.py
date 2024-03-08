@@ -7,7 +7,6 @@ from langchain_core.documents.base import Document
 import os
 import time
 import duckduckgo_verbose_search
-from tqdm import tqdm
 from wikidata_search import WikidataSearch, get_all_properties_with_labels
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
 import wikidata_search
@@ -147,7 +146,7 @@ class WebKGValidator(BaseModel):
 
         self['validated_triples'] = []
 
-        for triple in tqdm(self['triples']):
+        for triple in self['triples']:
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
@@ -238,7 +237,7 @@ class WikidataKGValidator(BaseModel):
         wrapper.top_k_results = 1
         wikidata_wrapper = WikidataQueryRun(api_wrapper=wrapper)
 
-        for triple in tqdm(self['triples']):
+        for triple in self['triples']:
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
@@ -281,7 +280,7 @@ class WorldKnowledgeKGValidator(BaseModel):
 
         self['validated_triples'] = []
 
-        for triple in tqdm(self['triples']):
+        for triple in self['triples']:
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
@@ -324,7 +323,7 @@ class WikidataWebKGValidator(BaseModel):
         wrapper.top_k_results = 1
         wikidata_wrapper = WikidataQueryRun(api_wrapper=wrapper)
 
-        for triple in tqdm(self['triples']):
+        for triple in self['triples']:
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
@@ -387,7 +386,7 @@ class ReferenceKGValidator(BaseModel):
         self['validated_triples'] = []
 
 
-        for triple in tqdm(self['triples']):
+        for triple in self['triples']:
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
@@ -438,7 +437,7 @@ class WikipediaWikidataKGValidator(BaseModel):
         wikidata_wrapper = WikidataQueryRun(api_wrapper=wrapper)
 
 
-        for triple in tqdm(self['triples']):
+        for triple in self['triples']:
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
@@ -504,7 +503,7 @@ class TextContextKGValidator(BaseModel):
 
         self['validated_triples'] = []
 
-        for triple in tqdm(self['triples']):
+        for triple in self['triples']:
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 

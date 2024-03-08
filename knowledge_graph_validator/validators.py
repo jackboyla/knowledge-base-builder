@@ -147,11 +147,11 @@ class WebKGValidator(BaseModel):
 
         self['validated_triples'] = []
 
-        search_tool = duckduckgo_verbose_search.DuckDuckGoVerboseSearch(max_search_results=5)
-
         for triple in tqdm(self['triples']):
 
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
+
+            search_tool = duckduckgo_verbose_search.DuckDuckGoVerboseSearch(max_search_results=5)
 
             search_query = WebKGValidator.create_query(subject, relation, object)
 
@@ -166,7 +166,8 @@ class WebKGValidator(BaseModel):
                 vectorstore=vectorstore,
                 retriever=retriever,
             )
-            reference_context = {'relevant_text': relevant_chunks}
+            relevant_chunks = validator_utils.truncate_tokens(relevant_chunks, max_tokens=15_000)
+            reference_context = {'web_reference': relevant_chunks}
 
             # EVALUATE ONE PROPERTY
             resp = validate_statement_with_context(
@@ -179,6 +180,8 @@ class WebKGValidator(BaseModel):
             resp.candidate_triple = triple
 
             self['validated_triples'].append(resp)
+
+            del search_tool, retriever, store, vectorstore, relevant_chunks, reference_context, web_reference, web_results
         return self
 
 
@@ -339,7 +342,8 @@ class WikidataWebKGValidator(BaseModel):
                 vectorstore=vectorstore,
                 retriever=retriever,
             )
-            reference_context = {'web_reference': web_reference, 'wikidata_reference': wikidata_reference}
+            relevant_chunks = validator_utils.truncate_tokens(relevant_chunks, max_tokens=15_000)
+            reference_context = {'web_reference': relevant_chunks, 'wikidata_reference': wikidata_reference}
 
             # EVALUATE ONE PROPERTY
             resp = validate_statement_with_context(
@@ -454,6 +458,7 @@ class WikipediaWikidataKGValidator(BaseModel):
                 vectorstore=vectorstore,
                 retriever=retriever,
             )
+            relevant_chunks = validator_utils.truncate_tokens(relevant_chunks, max_tokens=15_000)
             reference_context = {'relevant_text': relevant_chunks, 'wikidata_reference': wikidata_reference}
 
             # EVALUATE ONE PROPERTY
@@ -487,6 +492,7 @@ class TextContextKGValidator(BaseModel):
 
     triples: List
     validated_triples: List[ValidatedTriple] = []
+    documents: List[str]
 
 
     @model_validator(mode='before')
@@ -507,6 +513,7 @@ class TextContextKGValidator(BaseModel):
                 vectorstore=vectorstore,
                 retriever=retriever,
             )
+            relevant_chunks = validator_utils.truncate_tokens(relevant_chunks, max_tokens=15_000)
             reference_context = {'relevant_text': relevant_chunks}
 
 

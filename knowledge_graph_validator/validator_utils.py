@@ -21,6 +21,7 @@ from wikidata_search import WikidataSearch, get_all_properties_with_labels
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
 
 
+CHARS_PER_TOKEN = 4
 
 
 @staticmethod
@@ -28,7 +29,7 @@ def create_parent_document_retriever(docs: List[Document]):
     # https://python.langchain.com/docs/modules/data_connection/retrievers/parent_document_retriever
 
     # This text splitter is used to create the child documents
-    child_splitter = RecursiveCharacterTextSplitter(chunk_size=1000)
+    child_splitter = RecursiveCharacterTextSplitter(chunk_size=500)
     # The vectorstore to use to index the child chunks
     vectorstore = Chroma(
         collection_name="full_documents", embedding_function=OpenAIEmbeddings()
@@ -72,9 +73,18 @@ def retrieve_relevant_triples(query, reference_kg: List[Dict]) -> List[Dict]:
             relevant_triples.append(triple)
     return relevant_triples
 
+@staticmethod
+def calc_num_tokens(inp) -> int:
+    return len(str(inp)) // CHARS_PER_TOKEN
+
 
 @staticmethod
-def retrieve_relevant_chunks(query, vectorstore, retriever, num_chunks=10):
+def truncate_tokens(inp, max_tokens=15_000) -> str:
+    return str(inp)[ : max_tokens * CHARS_PER_TOKEN]
+
+
+@staticmethod
+def retrieve_relevant_chunks(query, vectorstore, retriever, num_chunks=3) -> List:
     '''Fetch the most similar chunk to the given query'''
     relevant_chunks = []
     sub_docs = vectorstore.similarity_search(query)

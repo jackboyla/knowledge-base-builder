@@ -1,16 +1,18 @@
 #!/bin/bash
 
-# bash assess_validators.sh | tee logs/run_$(date "+%Y-%m-%d_%H-%M-%S").log
+# bash assess_validators.sh 2>&1 | tee logs/run_$(date "+%Y-%m-%d_%H-%M-%S").log
+
 
 # Define arrays for each parameter if they vary between experiments
 # For this example, let's vary the datasets and random seeds
-datasets=("FB13" "FB15K-237-N" "CoDeX-S" "Wiki27K" "YAGO3-10")
+datasets=("UMLS" "FB15K-237-N" "Wiki27K" "FB13" "CoDeX-S" "YAGO3-10")
 
 # Fixed parameters can just be set once
 model="gpt-3.5-turbo-0125"
-context_types=('WorldKnowledgeKGValidator' 'WikidataKGValidator' 'WebKGValidator' 'WikidataWebKGValidator' 'WikipediaWikidataKGValidator')
-seed=41
-num_examples=150
+context_types=('WebKGValidator' 'WorldKnowledgeKGValidator' 'WikidataKGValidator' 'WikidataWebKGValidator' 'WikipediaWikidataKGValidator')
+seed=17
+num_examples=4
+embedding_model="all-MiniLM-L6-v2" #  all-MiniLM-L6-v2 / mixedbread-ai/mxbai-embed-large-v1 / text-embedding-3-small
 
 # Loop through all combinations of datasets and seeds
 for dataset in "${datasets[@]}"; do
@@ -21,6 +23,7 @@ for dataset in "${datasets[@]}"; do
             --num-examples "$num_examples" \
             --random-seed "$seed" \
             --model "$model" \
-            --context-type "$context_type"
+            --context-type "$context_type" \
+            --embedding-model "$embedding_model"
     done
 done

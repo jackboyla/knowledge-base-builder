@@ -4,6 +4,7 @@ from typing import List, Dict, Union, Any, Optional, Literal
 import instructor
 from openai import OpenAI
 from langchain_core.documents.base import Document
+from embedding_models import EmbeddingModelFactory
 import os
 import time
 import duckduckgo_verbose_search
@@ -16,8 +17,16 @@ import utils
 logger = utils.create_logger(__name__)
 
 client = instructor.patch(OpenAI(api_key=os.environ['OPENAI_API_KEY']))
+
 MODEL = os.environ['VALIDATION_MODEL']
 logger.info(f"Using Validator model {MODEL}")
+
+EMBEDDING_MODEL = EmbeddingModelFactory.get_embedding_model(os.environ['EMBEDDING_MODEL'])
+if hasattr(EMBEDDING_MODEL, 'name'):
+    EMBEDDING_MODEL_NAME = EMBEDDING_MODEL.name
+else:
+    EMBEDDING_MODEL_NAME = EMBEDDING_MODEL.model    # for openai models
+logger.info(f"Using embedding model {EMBEDDING_MODEL_NAME}")
 
 
 class ValidatedTriple(BaseModel, extra='allow'):
@@ -138,8 +147,11 @@ class WebKGValidator(BaseModel):
     @staticmethod
     def create_query(subject, relation, object):
         '''Create a query for the web search engine'''
-        search_query = f"What {subject} {relation} {object}?"
-        return search_query
+        if EMBEDDING_MODEL_NAME == "mixedbread-ai/mxbai-embed-large-v1":
+                # necessary (see blog post: https://www.mixedbread.ai/blog/mxbai-embed-large-v1)
+                return f"Represent this sentence for searching relevant passages: {subject} {relation} {object}"
+        query = f"{subject} {relation} {object}"
+        return query
 
     @model_validator(mode='before')
     def validate(self, context) -> "WebKGValidator":
@@ -152,21 +164,21 @@ class WebKGValidator(BaseModel):
 
             search_tool = duckduckgo_verbose_search.DuckDuckGoVerboseSearch(max_search_results=5)
 
-            search_query = WebKGValidator.create_query(subject, relation, object)
+            search_query = f"What {subject} {relation} {object}?"
 
             # web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
 
             web_results: List[Dict] = search_tool(search_query)
             web_reference = [Document(f"{result['title']} {result['body']}") for result in web_results]
-            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(web_reference)
+            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(web_reference, embedding_function=EMBEDDING_MODEL)
 
             relevant_chunks = validator_utils.retrieve_relevant_chunks(
-                query=f"{triple['subject']} {triple['relation']} {triple['object']}", 
+                query=WebKGValidator.create_query(subject, relation, object), 
                 vectorstore=vectorstore,
                 retriever=retriever,
             )
             relevant_chunks = validator_utils.truncate_tokens(relevant_chunks, max_tokens=15_000)
-            reference_context = {'web_reference': relevant_chunks}
+            reference_context = {'relevant_text': relevant_chunks}
 
             # EVALUATE ONE PROPERTY
             resp = validate_statement_with_context(
@@ -328,16 +340,16 @@ class WikidataWebKGValidator(BaseModel):
             subject, relation, object = triple['subject'], triple['relation'], triple['object']
 
             wikidata_reference = WikidataKGValidator.get_wikidata(subject, wikidata_wrapper)
-            search_query = WebKGValidator.create_query(subject, relation, object)
+            search_query = f"What {subject} {relation} {object}?"
 
             # web_reference = WebKGValidator.get_web_search_results(search_tool, search_query)
 
             web_results: List[Dict] = search_tool(search_query)
             web_reference = [Document(f"{result['title']} {result['body']}") for result in web_results]
-            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(web_reference)
+            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(web_reference, embedding_function=EMBEDDING_MODEL)
 
             relevant_chunks = validator_utils.retrieve_relevant_chunks(
-                query=f"{triple['subject']} {triple['relation']} {triple['object']}", 
+                query=WebKGValidator.create_query(subject, relation, object), 
                 vectorstore=vectorstore,
                 retriever=retriever,
             )
@@ -447,13 +459,11 @@ class WikipediaWikidataKGValidator(BaseModel):
             if len(wikidata_ids) > 0:
                 wikipedia_content = wikidata_search.fetch_wikipedia_page_content(wikidata_ids[0]['id'])
 
-            # logger.info(f"Constructing vectorstore for the reference context...")
             reference = [Document(wikipedia_content)]
-            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(reference)
-            # logger.info(f"Vectorstore built!")
+            retriever, store, vectorstore = validator_utils.create_parent_document_retriever(reference, embedding_function=EMBEDDING_MODEL)
 
             relevant_chunks = validator_utils.retrieve_relevant_chunks(
-                query=f"{triple['subject']} {triple['relation']} {triple['object']}", 
+                query=WebKGValidator.create_query(subject, relation, object), 
                 vectorstore=vectorstore,
                 retriever=retriever,
             )
@@ -499,7 +509,7 @@ class TextContextKGValidator(BaseModel):
 
         # create the document store
         docs = [Document(d) for d in self['documents']]
-        retriever, store, vectorstore = validator_utils.create_parent_document_retriever(docs)
+        retriever, store, vectorstore = validator_utils.create_parent_document_retriever(docs, embedding_function=EMBEDDING_MODEL)
 
         self['validated_triples'] = []
 

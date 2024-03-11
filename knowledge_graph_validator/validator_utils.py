@@ -25,14 +25,14 @@ CHARS_PER_TOKEN = 4
 
 
 @staticmethod
-def create_parent_document_retriever(docs: List[Document]):
+def create_parent_document_retriever(docs: List[Document], embedding_function):
     # https://python.langchain.com/docs/modules/data_connection/retrievers/parent_document_retriever
 
     # This text splitter is used to create the child documents
     child_splitter = RecursiveCharacterTextSplitter(chunk_size=500)
     # The vectorstore to use to index the child chunks
     vectorstore = Chroma(
-        collection_name="full_documents", embedding_function=OpenAIEmbeddings()
+        collection_name="full_documents", embedding_function=embedding_function
     )
     # The storage layer for the parent documents
     store = InMemoryStore()

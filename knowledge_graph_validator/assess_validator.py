@@ -45,11 +45,12 @@ def sample_triples(triples, num_examples, random_seed=None):
 @click.option('--num-examples', default=10, type=int, help='Number of examples to evaluate')
 @click.option('--random-seed', required=False, default=None, type=int, help='Random seed to select examples')
 @click.option('--model', required=True, type=click.Choice(['gpt-4-1106-preview', 'gpt-3.5-turbo-0125'], case_sensitive=False), help='The model to use as validator.')
+@click.option('--embedding-model', required=True, type=str, help='The model to use as to embed textual context.')
 @click.option('--context-type', required=True, type=click.Choice(
     ['WorldKnowledgeKGValidator', 'ReferenceKGValidator', 'TextContextKGValidator', 'WikidataKGValidator', 'WebKGValidator', 'WikidataWebKGValidator', 'WikipediaWikidataKGValidator'], 
     case_sensitive=False
     ), help='Model name')
-def main(dataset, num_examples, random_seed, model, context_type):
+def main(dataset, num_examples, random_seed, model, embedding_model, context_type):
     """Evaluate a model on a dataset.
 
     usage:
@@ -58,10 +59,12 @@ def main(dataset, num_examples, random_seed, model, context_type):
                     --num-examples 4 \
                     --random-seed 23 \
                     --model gpt-3.5-turbo-0125 \
+                    --embedding-model text-embedding-3-small \
                     --context-type WebKGValidator \
         
     """
     os.environ['VALIDATION_MODEL'] = model
+    os.environ['EMBEDDING_MODEL'] = embedding_model   # all-MiniLM-L6-v2 / mixedbread-ai/mxbai-embed-large-v1 / text-embedding-3-small
     import validators
 
     positive_triples, negative_triples = utils.read_dataset(dataset)

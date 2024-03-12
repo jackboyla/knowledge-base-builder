@@ -170,7 +170,7 @@ def parse_triple(input_str: str, dataset_name:str) -> Dict[str, str]:
 
     return {"subject": head, "relation": relation, "object": tail}
 
-def negative_sampling(triples):
+def negative_sampling(triples, existing_triples: set):
     """
     Performs negative sampling by swapping the object of one triple with another.
 
@@ -188,15 +188,17 @@ def negative_sampling(triples):
     sampled_triples = triples[:]
     
     for i in range(len(triples)):
-        # Select a random index different from i
         swap_index = i
-        while swap_index == i:
-            swap_index = random.randint(0, len(triples) - 1)
-        
+
         # Swap the 'object' of the current triple with the 'object' of the randomly selected triple
         sampled_triples[i]['object'], sampled_triples[swap_index]['object'] = sampled_triples[swap_index]['object'], sampled_triples[i]['object']
-    
+
+        while swap_index == i or str(sampled_triples[i]) in existing_triples:  # make sure the negative sample is not in the existing triples
+            swap_index = random.randint(0, len(triples) - 1)
+            sampled_triples[i]['object'], sampled_triples[swap_index]['object'] = sampled_triples[swap_index]['object'], sampled_triples[i]['object']
+
     return sampled_triples
+
 
 def read_dataset(
     dataset_name: Literal[
@@ -294,8 +296,24 @@ def read_dataset(
                 }
                 triples.append(triple)
 
+        existing_triples = set()
+        for triple in triples:
+            existing_triples.add(str(triple))
+        for file_path in [f'../data/{dataset_name}/train.tsv', f'../data/{dataset_name}/dev.tsv']:
+            with open(file_path, "r") as file:
+                for line in file:
+                    parts = line.strip().split("\t")  # Splitting each line by tab
+                    assert len(parts) == 3
+                    subject, relation, object_ = parts
+                    triple = {
+                        "subject": subject,
+                        "relation": relation,
+                        "object": object_,
+                    }
+                    existing_triples.add(str(triple))
+
         positive_triples = copy.deepcopy(triples)
-        negative_triples = negative_sampling(triples)
+        negative_triples = negative_sampling(triples, existing_triples)
                         
         positive_triples = translate_triples(positive_triples, ent_mapping, rel_mapping)
         negative_triples = translate_triples(negative_triples, ent_mapping, rel_mapping)
